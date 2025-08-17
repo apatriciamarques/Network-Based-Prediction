@@ -83,13 +83,14 @@ all_genes_filtered$index <- seq_len(nrow(all_genes_filtered))
 gene_edges_filtered <- gene_edges_filtered %>%
   left_join(all_genes_filtered, by=c("gene1"="gene")) %>% rename(index1=index) %>%
   left_join(all_genes_filtered, by=c("gene2"="gene")) %>% rename(index2=index) %>%
-  select(index1, gene1, index2, gene2)
+  select(index1, gene1, index2, gene2)  %>%
+  arrange(index1, index2)
 
 gene_degrees_filtered <- gene_degrees_filtered %>% left_join(all_genes_filtered, by="gene") %>%
-  select(index, gene, Degree)
+  select(index, gene, Degree) %>% arrange(index)
 
 mut_sig_filtered <- mut_sig_filtered %>% left_join(all_genes_filtered, by="gene") %>%
-  select(index, gene, pval, mutsig_score)
+  select(index, gene, pval, mutsig_score) %>% arrange(index)
 
 write_csv(mut_sig_filtered, "MutSig_gene_pvalues_filtered_with_index.csv")
 write_csv(gene_edges_filtered, "OmniPath_gene_edges_filtered_with_index.csv")
