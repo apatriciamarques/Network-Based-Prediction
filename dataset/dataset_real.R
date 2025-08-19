@@ -119,7 +119,7 @@ p_before <- ggplot(gene_degrees, aes(x = Degree)) +
   geom_histogram(binwidth = 0.1, fill = "steelblue", color = "white") +
   theme_minimal() +
   labs(title = "Histogram of Gene Degrees (Before Filtering)",
-       x = "Degree (Number of connections)", y = "Number of genes") +
+       x = "log10 Degree (Number of connections)", y = "Number of genes") +
   scale_x_log10()
 ggsave("Degree_histogram_before.png", p_before, width = 7, height = 5, dpi = 300)
 cat("s BEFORE:", max(gene_degrees$Degree),
@@ -130,7 +130,7 @@ p_after <- ggplot(gene_degrees_filtered, aes(x = Degree)) +
   geom_histogram(binwidth = 0.1, fill = "darkorange", color = "white") +
   theme_minimal() +
   labs(title = "Histogram of Gene Degrees (After Filtering)",
-       x = "Degree (Number of connections)", y = "Number of genes") +
+       x = "log10 Degree (Number of connections)", y = "Number of genes") +
   scale_x_log10()
 ggsave("Degree_histogram_after.png", p_after, width = 7, height = 5, dpi = 300)
 cat("s AFTER:", max(gene_degrees_filtered$Degree),
