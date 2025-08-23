@@ -8,9 +8,9 @@ from itertools import groupby
 from operator import itemgetter
 # ---------- caching / dtype config ----------
 DTYPE = np.float32
-show = False
+show = True
 nodeCheck = 0 # 0-based
-graph_type = "PPI" # "synthetic"
+graph_type = "synthetic" # "PPI" # 
 
 def input_data(graph_type = "synthetic", n = 7, m = 2, show = False):
     ''' 
@@ -244,40 +244,6 @@ def check_feat_rotation(nodeCheck, neighborsCheck):
     print("Neighbor's FeatureNorm:", featuresNorm[neighborsCheck[0]])
     print(get_feature_rotation(nodeCheck + 1, 1))
 
-def oracleX_kronecker(feat_vec, i, q=4):
-    """
-    Equivalent to OX as in the paper.
-    Build a Kronecker product of length n where:
-    - first i slots = feat_vec
-    - remaining slots = [1,0]
-    """
-    # base = np.array([1,0], dtype=DTYPE)
-    # vecs = [feat_vec if j < i else base for j in range(n)]
-
-    # result = vecs[0]
-    # for vec in vecs[1:]:
-    #     result = np.kron(result, vec).astype(DTYPE)
-
-        # length of final vector = 2^q
-
-    final_len = 2 ** q
-    result = np.zeros(final_len, dtype=DTYPE)
-
-    # iterate over indices 0..15
-    for idx in range(final_len):
-        val = 1.0
-        for slot in range(q):
-            # which bit of idx corresponds to this slot
-            bit = (idx >> (q - 1 - slot)) & 1
-            # decide if this slot uses feat_vec or [1,0]
-            if slot < i:
-                val *= feat_vec[bit]
-            else:
-                val *= 1.0 if bit == 0 else 0.0
-        result[idx] = val
-
-    return result
-
 def get_firstHopStates():
     '''
         QMME Circuit: c=1: Feature Embeddings for (v, l, i)
@@ -291,52 +257,77 @@ def get_firstHopStates():
     for v in range(nrNodes):
         print(f"firstHopStates: v: {v}/{nrNodes-1}")
         for l_idx in range(s):
-            # base feature vector (i = 1 / mean)
             feat_vec = get_feature_rotation(v + 1, l_idx + 1) @ np.array([1, 0], dtype=DTYPE)
-            u_val = get_r(v, l_idx) + 1
 
-            for i in range(1, 5):
-                combined_vec = oracleX_kronecker(feat_vec, i)
+            # Precompute all Kronecker combinations for 4 ancilla rotations
+            vect_list = [feat_vec.copy() for _ in range(4)]
+            combined_vec = vect_list[0]
+            for vec in vect_list[1:]:
+                combined_vec = np.kron(combined_vec, vec).astype(DTYPE)
+
+            firstHopStates.append({
+                "v": v + 1,
+                "i": 1,
+                "l": l_idx + 1,
+                "u": get_r(v, l_idx) + 1,
+                # "featVec": feat_vec,
+                "state": combined_vec
+            })
+
+            for i in range(2, 5):
+                vect_list[i-1] = feat_vec
+                combined_vec = vect_list[0]
+                for vec in vect_list[1:]:
+                    combined_vec = np.kron(combined_vec, vec).astype(DTYPE)
+
                 firstHopStates.append({
                     "v": v + 1,
                     "i": i,
                     "l": l_idx + 1,
-                    "u": u_val,
+                    "u": get_r(v, l_idx) + 1,
                     # "featVec": feat_vec,
                     "state": combined_vec
                 })
     return firstHopStates
 
 def get_firstHopSuperposedStates(firstHopStates):
+    '''
+        QMME Circuit: Superposition from firstHopsStates
+        First-hop neighborhood:
+        For each (v, i), get the one feature vectors
+        of dimension 2^5 s = 64 (5 ancilla rotations and the l register).
+    '''
+    # Group firstHopStates by (v, i)
+    firstHopStates_sorted = sorted(firstHopStates, key=lambda x: (x["v"], x["i"]))
+    groupedByVI = {key: list(group) for key, group in groupby(firstHopStates_sorted, key=lambda x: (x["v"], x["i"]))}
+
     firstHopSuperposedStates = []
 
-    firstHopStates_sorted = sorted(firstHopStates, key=lambda x: (x["v"], x["i"]))
-    for (v, i), group in groupby(firstHopStates_sorted, key=lambda x: (x["v"], x["i"])):
-        states = list(group)
-        s_eff = len(states)
-        stateDim = 16  # dim of individual feat_vec
+    for (v, i), states in groupedByVI.items():
+        print(f"firstHopSuperposedStates: v: {v}/{nrNodes}, i: {i}")
+        s = len(states)
+        stateDim = 16  # dimension of individual featVec states
 
-        degRotVec = Wtheta(2 * np.arccos(1 / nodeDegrees[v - 1])) @ np.array([1, 0], dtype=DTYPE)
-        # preallocate final vector in one go
-        finalState = np.zeros(s_eff * stateDim * 2, dtype=DTYPE)
+        # Combine the states along l (length s * stateDim)
+        combinedState = np.concatenate([state["state"] for state in states], axis=0)
 
-        for idx_l, state in enumerate(states):
-            # apply Hadamard on the l register (simple average for 1D)
-            for idx_bit, val in enumerate(state["state"]):
-                val_h = val / np.sqrt(s_eff)
-                finalState_idx = (idx_l * stateDim + idx_bit) * 2
-                finalState[finalState_idx : finalState_idx+2] = val_h * degRotVec
+        # Hadamard on l register
+        HOnL = np.kron(Hl, np.eye(stateDim)).astype(DTYPE)
+        hadState = HOnL @ combinedState / np.sqrt(s)
 
-        # normalize in-place
-        finalState /= np.linalg.norm(finalState)
+        # Degree rotation
+        degRotVec = Wtheta(2 * np.arccos(1 / nodeDegrees[v - 1])) @ np.array([1, 0], dtype=DTYPE)  # 1-based v
+        finalState = np.kron(hadState, degRotVec).astype(DTYPE).flatten()
 
         firstHopSuperposedStates.append({
             "c": 1,
             "v": v,
             "i": i,
+            # "stateCombined": combinedState,
+            # "stateHadamardL": hadState,
+            # "degRotVec": degRotVec,
             "stateDegreeRotated": finalState
         })
-
     return firstHopSuperposedStates
 
 def get_secondHopStates(firstHopStates):
@@ -346,120 +337,138 @@ def get_secondHopStates(firstHopStates):
         For each (v, l1, l2), get the 16 feature vectors (for each i, l1, l2)
         of dimension 2^4 = 16 (4 ancilla rotations).
     '''
-    # Group firstHopStates by v
+    # Preprocess: group firstHopStates by "v"
     firstHopByV = defaultdict(list)
     for state in firstHopStates:
         firstHopByV[state["v"]].append(state)
 
-    for v0 in range(1, nrNodes + 1):
-        print(f"secondHopStates: v: {v0}/{nrNodes-1}")
-        for l0 in range(1, s + 1):
-            u0 = get_r(v0 - 1, l0 - 1) + 1
-            for state in firstHopByV.get(u0, []):
-                yield {
-                    "v": v0,
-                    "i": state["i"],
-                    # "l0": l0,
-                    # "u0": u0,
-                    # "l1": state["l"],
-                    # "u1": state["u"],
-                    "state": state["state"]
-                }
+    secondHopStates = []
 
-def get_secondHopSuperposedStates(secondHopStatesGen):
-    grouped = defaultdict(list)
-    for st in secondHopStatesGen:
-        grouped[(st["v"], st["i"])].append(st["state"])
+    for v0 in range(1, nrNodes + 1):  # 1-based indexing
+        print(f"secondHopStates: v: {v0}/{nrNodes-1}")
+        for l0 in range(1, s + 1):    # 1-based indexing
+            u0 = get_r(v0 - 1, l0 - 1) + 1 # 1-based adjacency
+            secondHopStates.extend([{
+                "v": v0,
+                "i": state["i"],
+                # "l0": l0,
+                # "u0": u0,
+                # "l1": state["l"],
+                # "u1": state["u"],
+                "state": state["state"]
+            } for state in firstHopByV.get(u0, [])])
+    return secondHopStates
+
+def get_secondHopSuperposedStates(secondHopStates):
+    '''
+        QMME Circuit: Superposition from secondHopsStates
+        Second-hop neighborhood: 
+        For each (v, i), get the one feature vectors
+        of dimension 2^5 s^2 = 128 (5 ancilla rotations and the l registers).
+    '''
+    # Group secondHopStates by (v, i)
+    secondHopStates_sorted = sorted(secondHopStates, key=lambda x: (x["v"], x["i"]))
+    groupedByVI2 = {}
+    for key, group in groupby(secondHopStates_sorted, key=lambda x: (x["v"], x["i"])):
+        groupedByVI2[key] = list(group)
 
     secondHopSuperposedStates = []
 
-    for (v, i), state_list in grouped.items():
+    for (v, i), states in groupedByVI2.items():
+        print(f"secondHopSuperposedStates: v: {v}/{nrNodes-1}, i: {i}")
         c = 2
-        stateDim = state_list[0].size
-        s_eff = len(state_list)
-        degRotVec = Wtheta(2 * np.arccos(1 / nodeDegreesC1[v-1])) @ np.array([1,0], dtype=DTYPE)
 
-        final_len = s_eff * stateDim * 2
-        finalState = np.zeros(final_len, dtype=DTYPE)
+        stateDim = states[0]["state"].size
 
-        for idx_l, vec in enumerate(state_list):
-            for idx_bit, val in enumerate(vec):
-                val_h = val / np.sqrt(s_eff)
-                finalState_idx = (idx_l * stateDim + idx_bit) * 2
-                finalState[finalState_idx : finalState_idx + 2] = val_h * degRotVec
+        # Flatten all states in the group (column-major to match Mathematica)
+        combinedState = np.stack([s["state"] for s in states]).flatten(order='F')
 
+        # Full size according to sparsity level sC1
+        full_length = s**2 * stateDim
+        paddedCombined = np.zeros(full_length, dtype=DTYPE)
+        paddedCombined[:combinedState.size] = combinedState
+
+        # Kronecker product for Hadamard on l0 and l1 registers
+        HOnL = np.kron(np.kron(Hl, Hl).astype(DTYPE), np.eye(stateDim)).astype(DTYPE)
+
+        # Multiply by HOnL using the padded state
+        hadState = (HOnL @ paddedCombined) / s
+
+        degRotVec = Wtheta(2 * np.arccos(1 / nodeDegreesC1[v - 1])) @ np.array([1, 0], dtype=DTYPE)
+        # degRotVec = get_degree_rotation(v, c) @ np.array([1, 0], dtype=DTYPE)
+        finalState = np.kron(hadState, degRotVec).astype(DTYPE).flatten()
         finalState /= np.linalg.norm(finalState)
 
         secondHopSuperposedStates.append({
             "c": c,
             "v": v,
             "i": i,
+            # "stateCombined": combinedState,
+            # "stateHadamardL": hadState,
+            # "degRotVec": degRotVec,
             "stateDegreeRotated": finalState
         })
-
     return secondHopSuperposedStates
 
 def get_allSuperposedStates(firstHopSuperposedStates, secondHopSuperposedStates):
     '''
-    QMME Circuit: Feature Embeddings Subscript[f, x](v,c,i)
-    Memory-optimized: no full padded arrays.
+        QMME Circuit: Feature Embeddings Subscript[f, x](v,c,i)
+        Both neighborhoods:
+        For each (v, c, i), get the one feature vectors
+        of dimension 2^5 s^2 = 128 (padded and unit-length).
     '''
     allSuperposedStates = []
 
-    target_len_c1 = 2**5 * s**2  # register l1, l2, and ancillas
+    target_len_c1 = 2**5 * s**2  # equivalent to 2^5 * s^2
 
-    # c = 1: streaming in-place padding
+    # c = 1: pad to target length
     for assoc in firstHopSuperposedStates:
         state_rot = assoc["stateDegreeRotated"]
-        if state_rot.size < target_len_c1:
-            padded = np.zeros(target_len_c1, dtype=DTYPE)
-            padded[:state_rot.size] = state_rot
-        else:
-            padded = state_rot
+        padded = np.pad(state_rot, (0, target_len_c1 - len(state_rot)))  # pad with zeros
+        # optionally normalize to unit norm
         padded /= np.linalg.norm(padded)
-
+        
         assoc_copy = assoc.copy()
         assoc_copy["statePadded"] = padded
         allSuperposedStates.append(assoc_copy)
 
-    # c = 2: already full-length from secondHopSuperposedStates
     for assoc in secondHopSuperposedStates:
         assoc_copy = assoc.copy()
         assoc_copy["statePadded"] = assoc_copy["stateDegreeRotated"]
         allSuperposedStates.append(assoc_copy)
-
     return allSuperposedStates
 
 def get_superLongVectorsByV(allSuperposedStates):
     '''
-    QMME Circuit: Feature Embeddings Subscript[f, x](v)
-    Memory-optimized: streaming concatenation per v
-    Dimension 2^(5+3) s^2 = 128x8=1024 (unit-length).
+        QMME Circuit: Feature Embeddings Subscript[f, x](v)
+        Both neighborhoods: For each v, get the one feature vectors
+        of dimension 2^(5+3) s^2 = 128x8=1024 (unit-length).
     '''
+    # Group all states by v
     vectorsByV = defaultdict(list)
     for assoc in allSuperposedStates:
         vectorsByV[assoc["v"]].append(assoc)
 
     print("Creating superLongVectorsByV...")
-
     superLongVectorsByV = {}
 
     for v, assocList in vectorsByV.items():
-        # preallocate exact size: 8 = 2(c) * 4(i)
-        total_len = sum(assoc["statePadded"].size for assoc in assocList)
-        superVec = np.zeros(total_len, dtype=DTYPE)
+        # Create a lookup {(c,i): assoc}
+        lookup = {(assoc["c"], assoc["i"]): assoc for assoc in assocList}
 
-        idx = 0
+        concatenated = []
+
         for c in [1, 2]:
-            for i in range(1, 5):
-                match = next((assoc for assoc in assocList if assoc["c"]==c and assoc["i"]==i), None)
-                if match is not None:
-                    vec = match["statePadded"] / np.sqrt(8)  # normalization factor
-                    superVec[idx : idx + vec.size] = vec
-                    idx += vec.size
+            for i in range(1, 5):  # i = 1..4
+                if (c, i) in lookup:
+                    vec = lookup[(c, i)]["statePadded"] / np.sqrt(8)
+                    concatenated.append(vec)
+                else:
+                    # skip if missing (Mathematica uses empty list)
+                    pass
 
-        superLongVectorsByV[v] = superVec
-
+        # flatten into a single long vector
+        superLongVectorsByV[v] = np.concatenate(concatenated)
     return superLongVectorsByV
 
 def compute_kernel_matrix(trainVecs, nPower=1, dtype=DTYPE):
@@ -575,10 +584,10 @@ print("Creating firstHopSuperposedStates...")
 firstHopSuperposedStates = get_firstHopSuperposedStates(firstHopStates)
 print("Finished.")
 print("Creating secondHopStates...")
-secondHopStatesGen = get_secondHopStates(firstHopStates)
+secondHopStates = get_secondHopStates(firstHopStates)
 print("Finished.")
 print("Creating secondHopSuperposedStates...")
-secondHopSuperposedStates = get_secondHopSuperposedStates(secondHopStatesGen)
+secondHopSuperposedStates = get_secondHopSuperposedStates(secondHopStates)
 print("Finished.")
 print("Creating allSuperposedStates...")
 allSuperposedStates = get_allSuperposedStates(firstHopSuperposedStates, secondHopSuperposedStates)
