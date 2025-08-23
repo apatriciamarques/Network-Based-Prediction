@@ -155,3 +155,20 @@ V(g_filtered)$label <- ifelse(V(g_filtered)$name %in% cgc_genes$gene, 1, 0) # 1 
 
 sum(V(g_filtered)$label == 1)   # 590 CGC genes in filtered network
 sum(V(g_filtered)$label == 0)   # 6260 non-CGC genes
+
+# ---------------------------------------------------------
+# Build filtered_nodes (feature, degree, label)
+# ---------------------------------------------------------
+
+reduced_x_k_y <- all_genes_filtered %>%
+  left_join(mut_sig_filtered %>% select(index, gene, mutsig_score), by = c("index", "gene")) %>%
+  left_join(gene_degrees_filtered %>% select(index, Degree), by = "index") %>%
+  mutate(
+    label = ifelse(gene %in% cgc_genes$gene, 1, 0)
+  ) %>%
+  select(index, gene, label, mutsig_score, Degree)
+
+# Save to CSV
+write_csv(reduced_x_k_y, "filtered_nodes.csv")
+
+cat("✅ rfiltered_nodes created with", nrow(reduced_x_k_y), "genes\n")

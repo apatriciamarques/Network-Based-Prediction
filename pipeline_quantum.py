@@ -1,3 +1,7 @@
+##################################################################################################################
+# Complete Pipeline for Non-regular Graphs (QMME Embeddings  + Swap-Test Classifier)
+##################################################################################################################
+
 ### Import Modules
 from qiskit import QuantumCircuit, QuantumRegister
 from qiskit.circuit import Gate, Instruction
