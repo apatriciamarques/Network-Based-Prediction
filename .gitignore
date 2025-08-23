@@ -1,4 +1,20 @@
-.Rproj.user
-.Rhistory
-.RData
-.Ruserdata
+# Datasets (too big for git)
+*.csv
+*.xlsx
+
+# Outputs
+output/
+mid_files/
+dataset_test/
+
+# Notebooks backups
+*.nb
+
+# Images, plots, binaries
+*.png
+*.pdf
+
+# OS/Editor junk
+.DS_Store
+Thumbs.db
+*.tmp
