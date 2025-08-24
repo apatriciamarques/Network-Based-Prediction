@@ -11,7 +11,7 @@ import os
 DTYPE = np.float32
 nodeCheck = 0 # 0-based
 show = True
-graph_type = "PPI" # "synthetic" # 
+graph_type = "synthetic" # "PPI" # 
 KERNEL_FILE = f"output/{graph_type}_kernel_matrix.npy"
 
 def input_data(graph_type = "synthetic", n = 7, m = 2, show = False):
@@ -403,75 +403,136 @@ def get_secondHopSuperposedStates(secondHopStatesGen):
 
     return secondHopSuperposedStates
 
-def get_superLongVectorsByVGen(firstHopSuperposedStates, secondHopSuperposedStates):
-    """Yield superLongVectorsByV node by node, streaming with fixed dimension."""
-    firstHopByV = defaultdict(list)
-    for assoc in firstHopSuperposedStates:
-        firstHopByV[assoc["v"]].append(assoc)
-
-    secondHopByV = defaultdict(list)
-    for assoc in secondHopSuperposedStates:
-        secondHopByV[assoc["v"]].append(assoc)
-
-    print("Creating superLongVectorsByV...")
-
-    block_len = 2**5 * s**2        # each (c,i) block length
-    target_len = 2 * 4 * block_len # 2 choices of c × 4 choices of i
-
-    for v in range(1, nrNodes + 1):
-        states_for_v = []
-
-        # pad c=1 states
-        for assoc in firstHopByV.get(v, []):
-            state_rot = assoc["stateDegreeRotated"]
-            padded = np.zeros(block_len, dtype=DTYPE)
-            padded[:state_rot.size] = state_rot
-            padded /= np.linalg.norm(padded)
-            assoc_copy = assoc.copy()
-            assoc_copy["statePadded"] = padded
-            states_for_v.append(assoc_copy)
-
-        # pad c=2 states
-        for assoc in secondHopByV.get(v, []):
-            state_rot = assoc["stateDegreeRotated"]
-            padded = np.zeros(block_len, dtype=DTYPE)
-            padded[:state_rot.size] = state_rot
-            padded /= np.linalg.norm(padded)
-            assoc_copy = assoc.copy()
-            assoc_copy["statePadded"] = padded
-            states_for_v.append(assoc_copy)
-
-        # build fixed-length super vector
-        superVec = np.zeros(target_len, dtype=DTYPE)
-        idx = 0
-        for c in [1, 2]:
-            for i in range(1, 5):
-                match = next((assoc for assoc in states_for_v if assoc["c"] == c and assoc["i"] == i), None)
-                if match is not None:
-                    vec = match["statePadded"] / np.sqrt(8)
-                    superVec[idx:idx + block_len] = vec
-                # always move idx by block_len, even if missing
-                idx += block_len
-
-        yield v, superVec
-
-def compute_kernel_matrix(superLongVectorsByVGen, nPower=1, dtype=DTYPE):
+def get_superLongVectorNode(v, firstHopSuperposedStates, secondHopSuperposedStates):
     """
-    Compute kernel matrix from generator without materializing all vectors in RAM.
+    Compute superLongVector for a single node v on-demand.
+    This avoids storing all vectors in memory simultaneously.
     """
-    print("Creating Kernel Matrix Table (streaming)...")
-    # Collect vectors into a list so we know nrNodes
-    vecs = list(superLongVectorsByVGen)   # O(n) in memory, but avoids O(n*d)
-    node_ids, superVecs = zip(*vecs)
-    nrNodes = len(superVecs)
+    # Filter states for this specific node
+    first_hop_v = [assoc for assoc in firstHopSuperposedStates if assoc["v"] == v]
+    second_hop_v = [assoc for assoc in secondHopSuperposedStates if assoc["v"] == v]
+    
+    block_len = 2**5 * s**2         # each (c,i) block length
+    target_len = 2 * 4 * block_len  # 2 choices of c × 4 choices of i
+    
+    states_for_v = []
+    
+    # pad c=1 states
+    for assoc in first_hop_v:
+        state_rot = assoc["stateDegreeRotated"]
+        padded = np.zeros(block_len, dtype=DTYPE)
+        padded[:state_rot.size] = state_rot
+        padded /= np.linalg.norm(padded)
+        assoc_copy = assoc.copy()
+        assoc_copy["statePadded"] = padded
+        states_for_v.append(assoc_copy)
+    
+    # pad c=2 states
+    for assoc in second_hop_v:
+        state_rot = assoc["stateDegreeRotated"]
+        padded = np.zeros(block_len, dtype=DTYPE)
+        padded[:state_rot.size] = state_rot
+        padded /= np.linalg.norm(padded)
+        assoc_copy = assoc.copy()
+        assoc_copy["statePadded"] = padded
+        states_for_v.append(assoc_copy)
+    
+    # build fixed-length super vector
+    superVec = np.zeros(target_len, dtype=DTYPE) 
+    idx = 0
+    for c in [1, 2]:
+        for i in range(1, 5):
+            match = next((assoc for assoc in states_for_v if assoc["c"] == c and assoc["i"] == i), None)
+            if match is not None:
+                vec = match["statePadded"] / np.sqrt(8)
+                superVec[idx:idx + block_len] = vec
+            # always move idx by block_len, even if missing
+            idx += block_len
+    
+    return superVec
 
+# Optimized chunked approach for 10GB RAM limit
+def compute_kernel_matrix(firstHopSuperposedStates, secondHopSuperposedStates, 
+                                          nPower=1, dtype=DTYPE):
+    """
+    Optimized chunked approach for ~10GB RAM limit.
+    - Uses symmetric matrix property (only compute upper triangle)
+    - Optimal chunk size for your RAM
+    - Progress tracking and memory cleanup
+    """
+    print("Creating Kernel Matrix Table (optimized chunked approach)...")
+    
+    # Get node list
+    node_set = set()
+    for state in firstHopSuperposedStates:
+        node_set.add(state["v"])
+    for state in secondHopSuperposedStates:
+        node_set.add(state["v"])
+    
+    node_ids = sorted(list(node_set))
+    nrNodes = len(node_ids)
+    
+    # Calculate optimal chunk size for 10GB RAM
+    vector_size_gb = (2 * 4 * (2**5 * s**2) * 4) / (1024**3)  # 4 bytes per float32
+    max_vectors_in_memory = int(8 / vector_size_gb)  # Use 8GB of 10GB available
+    chunk_size = min(max_vectors_in_memory, 20)  # Cap at 20 for reasonable computation time
+    
+    print(f"Vector size: {vector_size_gb:.2f} GB")
+    print(f"Optimal chunk size: {chunk_size}")
+    print(f"Computing kernel matrix for {nrNodes} nodes...")
+    
     kernelMatrix = np.zeros((nrNodes, nrNodes), dtype=dtype)
-    # Compute row by row
-    for i in range(nrNodes):
-        vi = superVecs[i]
-        row = np.abs(np.dot(superVecs, vi)) ** (2 * nPower)
-        kernelMatrix[i, :] = row
-    print(f"Kernel matrix shape: {kernelMatrix.shape}")
+    
+    # Process in chunks - exploit symmetry
+    total_chunks = (nrNodes + chunk_size - 1) // chunk_size
+    
+    for i in range(0, nrNodes, chunk_size):
+        end_i = min(i + chunk_size, nrNodes)
+        current_chunk = (i // chunk_size) + 1
+        
+        print(f"\n=== Chunk {current_chunk}/{total_chunks} ===")
+        print(f"Processing nodes {i} to {end_i-1}")
+        
+        # Compute vectors for current chunk
+        print("Computing chunk vectors...")
+        chunk_vecs = []
+        for idx in range(i, end_i):
+            node = node_ids[idx]
+            vec = get_superLongVectorNode(node, firstHopSuperposedStates, secondHopSuperposedStates)
+            chunk_vecs.append(vec)
+        
+        # Compute kernel values within chunk (diagonal blocks)
+        print("Computing intra-chunk kernel values...")
+        for k1, vec1 in enumerate(chunk_vecs):
+            for k2, vec2 in enumerate(chunk_vecs):
+                if i + k1 <= i + k2:  # Only upper triangle
+                    kernel_val = np.abs(np.dot(vec1, vec2)) ** (2 * nPower)
+                    kernelMatrix[i + k1, i + k2] = kernel_val
+                    if i + k1 != i + k2:  # Fill symmetric entry
+                        kernelMatrix[i + k2, i + k1] = kernel_val
+        
+        # Compute kernel values with previous chunks (off-diagonal blocks)
+        print("Computing inter-chunk kernel values...")
+        for j in range(0, i):  # Only process previous chunks
+            node_j = node_ids[j]
+            vec_j = get_superLongVectorNode(node_j, firstHopSuperposedStates, secondHopSuperposedStates)
+            
+            for k, vec_i in enumerate(chunk_vecs):
+                kernel_val = np.abs(np.dot(vec_i, vec_j)) ** (2 * nPower)
+                kernelMatrix[i + k, j] = kernel_val
+                kernelMatrix[j, i + k] = kernel_val  # Symmetric entry
+            
+            del vec_j
+        
+        # Clean up chunk vectors
+        del chunk_vecs
+        
+        # Progress update
+        progress = (current_chunk / total_chunks) * 100
+        print(f"Progress: {progress:.1f}% complete")
+    
+    print(f"\nKernel matrix computation complete!")
+    print(f"Final kernel matrix shape: {kernelMatrix.shape}")
     return kernelMatrix, node_ids
 
 def plot_kernel_matrix(kernelMatrix, show=True):
@@ -592,12 +653,9 @@ else:
     print("Creating secondHopSuperposedStates...")
     secondHopSuperposedStates = get_secondHopSuperposedStates(secondHopStatesGen)
     print("Finished.")
-    print("Creating superLongVectorsByVGen...")
-    superLongVectorsByVGen = get_superLongVectorsByVGen(firstHopSuperposedStates, secondHopSuperposedStates)
-    print("Finished.")
 
     print("\nGot the data (embeddings). Start classification...")
-    kernelMatrix, node_ids = compute_kernel_matrix(superLongVectorsByVGen, nPower=1)
+    kernelMatrix, node_ids = compute_kernel_matrix(firstHopSuperposedStates, secondHopSuperposedStates, nPower=1)
     np.save(KERNEL_FILE, kernelMatrix)
     print(f"Kernel matrix saved to {KERNEL_FILE}")
 
