@@ -3,7 +3,8 @@ import time
 
 scripts = [
     "pipeline_algebra.py",
-    "pipeline_algebra_changes.py"
+    "pipeline_algebra_changes.py",
+    "pipeline_algebra_changes2.py"
 ]
 
 runtimes = []

@@ -8,7 +8,7 @@ from itertools import groupby
 from operator import itemgetter
 # ---------- caching / dtype config ----------
 DTYPE = np.float32
-show = True
+show = False
 nodeCheck = 0 # 0-based
 graph_type = "synthetic" # "PPI" # 
 
@@ -312,6 +312,7 @@ def get_firstHopSuperposedStates(firstHopStates):
 
     firstHopStates_sorted = sorted(firstHopStates, key=lambda x: (x["v"], x["i"]))
     for (v, i), group in groupby(firstHopStates_sorted, key=lambda x: (x["v"], x["i"])):
+        print(f"firstHopSuperposedStates: v: {v}/{nrNodes}, i: {i}")
         states = list(group)
         s_eff = len(states)
         stateDim = 16  # dim of individual feat_vec
@@ -352,7 +353,7 @@ def get_secondHopStates(firstHopStates):
         firstHopByV[state["v"]].append(state)
 
     for v0 in range(1, nrNodes + 1):
-        print(f"secondHopStates: v: {v0}/{nrNodes-1}")
+        print(f"secondHopStates: v: {v0}/{nrNodes}")
         for l0 in range(1, s + 1):
             u0 = get_r(v0 - 1, l0 - 1) + 1
             for state in firstHopByV.get(u0, []):
@@ -374,6 +375,7 @@ def get_secondHopSuperposedStates(secondHopStatesGen):
     secondHopSuperposedStates = []
 
     for (v, i), state_list in grouped.items():
+        print(f"secondHopSuperposedStates: v: {v}/{nrNodes}, i: {i}")
         c = 2
         stateDim = state_list[0].size
         s_eff = len(state_list)
@@ -410,7 +412,7 @@ def get_allSuperposedStates(firstHopSuperposedStates, secondHopSuperposedStates)
 
     # c = 1: streaming in-place padding
     for assoc in firstHopSuperposedStates:
-        state_rot = assoc["stateDegreeRotated"]
+        state_rot = assoc["stateDegreeRotated"] # Eventually: Unable to allocate 128. MiB for an array with shape (33554432,) and data type float32
         if state_rot.size < target_len_c1:
             padded = np.zeros(target_len_c1, dtype=DTYPE)
             padded[:state_rot.size] = state_rot
@@ -445,6 +447,7 @@ def get_superLongVectorsByV(allSuperposedStates):
     superLongVectorsByV = {}
 
     for v, assocList in vectorsByV.items():
+        print(f"superLongVectorsByV: v: {v}/{nrNodes}")
         # preallocate exact size: 8 = 2(c) * 4(i)
         total_len = sum(assoc["statePadded"].size for assoc in assocList)
         superVec = np.zeros(total_len, dtype=DTYPE)
