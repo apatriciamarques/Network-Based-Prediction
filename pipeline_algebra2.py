@@ -6,11 +6,13 @@ import seaborn as sns
 from collections import defaultdict
 from itertools import groupby
 from operator import itemgetter
+import os
 # ---------- caching / dtype config ----------
 DTYPE = np.float32
-show = True
 nodeCheck = 0 # 0-based
-graph_type = "synthetic" # "PPI" # 
+show = True
+graph_type = "PPI" # "synthetic" # 
+KERNEL_FILE = f"output/{graph_type}_kernel_matrix.npy"
 
 def input_data(graph_type = "synthetic", n = 7, m = 2, show = False):
     ''' 
@@ -301,7 +303,7 @@ def get_firstHopStates():
                     "v": v + 1,
                     "i": i,
                     "l": l_idx + 1,
-                    "u": u_val,
+                    # "u": u_val,
                     # "featVec": feat_vec,
                     "state": combined_vec
                 })
@@ -401,111 +403,76 @@ def get_secondHopSuperposedStates(secondHopStatesGen):
 
     return secondHopSuperposedStates
 
-def get_allSuperposedStates(firstHopSuperposedStates, secondHopSuperposedStates):
-    '''
-    QMME Circuit: Feature Embeddings Subscript[f, x](v,c,i)
-    Memory-optimized: no full padded arrays.
-    '''
-    allSuperposedStates = []
-
-    target_len_c1 = 2**5 * s**2  # register l1, l2, and ancillas
-
-    # c = 1: streaming in-place padding
-    for assoc in firstHopSuperposedStates:
-        state_rot = assoc["stateDegreeRotated"] # Eventually: Unable to allocate 128. MiB for an array with shape (33554432,) and data type float32
-        if state_rot.size < target_len_c1:
-            padded = np.zeros(target_len_c1, dtype=DTYPE)
-            padded[:state_rot.size] = state_rot
-        else:
-            padded = state_rot
-        padded /= np.linalg.norm(padded)
-
-        assoc_copy = assoc.copy()
-        assoc_copy["statePadded"] = padded
-        allSuperposedStates.append(assoc_copy)
-
-    # c = 2: already full-length from secondHopSuperposedStates
-    for assoc in secondHopSuperposedStates:
-        assoc_copy = assoc.copy()
-        assoc_copy["statePadded"] = assoc_copy["stateDegreeRotated"]
-        allSuperposedStates.append(assoc_copy)
-
-    return allSuperposedStates
-
 def get_superLongVectorsByVGen(firstHopSuperposedStates, secondHopSuperposedStates):
-    """Yield superLongVectorsByV node by node, streaming."""
-    # Group first- and second-hop states by node
+    """Yield superLongVectorsByV node by node, streaming with fixed dimension."""
     firstHopByV = defaultdict(list)
     for assoc in firstHopSuperposedStates:
         firstHopByV[assoc["v"]].append(assoc)
-
-    print("Creating superLongVectorsByV...")
 
     secondHopByV = defaultdict(list)
     for assoc in secondHopSuperposedStates:
         secondHopByV[assoc["v"]].append(assoc)
 
+    print("Creating superLongVectorsByV...")
+
+    block_len = 2**5 * s**2        # each (c,i) block length
+    target_len = 2 * 4 * block_len # 2 choices of c × 4 choices of i
+
     for v in range(1, nrNodes + 1):
-        # Collect states for this node
         states_for_v = []
 
-        target_len_c1 = 2**5 * s**2
+        # pad c=1 states
         for assoc in firstHopByV.get(v, []):
             state_rot = assoc["stateDegreeRotated"]
-            if state_rot.size < target_len_c1:
-                padded = np.zeros(target_len_c1, dtype=DTYPE)
-                padded[:state_rot.size] = state_rot
-            else:
-                padded = state_rot
+            padded = np.zeros(block_len, dtype=DTYPE)
+            padded[:state_rot.size] = state_rot
             padded /= np.linalg.norm(padded)
             assoc_copy = assoc.copy()
             assoc_copy["statePadded"] = padded
             states_for_v.append(assoc_copy)
-        
-        target_len_c2 = target_len_c1
 
+        # pad c=2 states
         for assoc in secondHopByV.get(v, []):
             state_rot = assoc["stateDegreeRotated"]
-            if state_rot.size < target_len_c2:
-                padded = np.zeros(target_len_c2, dtype=DTYPE)
-                padded[:state_rot.size] = state_rot
-            else:
-                padded = state_rot
+            padded = np.zeros(block_len, dtype=DTYPE)
+            padded[:state_rot.size] = state_rot
             padded /= np.linalg.norm(padded)
             assoc_copy = assoc.copy()
             assoc_copy["statePadded"] = padded
             states_for_v.append(assoc_copy)
 
-        # Create superLongVector for this node
-        total_len = sum(assoc["statePadded"].size for assoc in states_for_v)
-        superVec = np.zeros(total_len, dtype=DTYPE)
-
+        # build fixed-length super vector
+        superVec = np.zeros(target_len, dtype=DTYPE)
         idx = 0
         for c in [1, 2]:
             for i in range(1, 5):
-                match = next((assoc for assoc in states_for_v if assoc["c"]==c and assoc["i"]==i), None)
+                match = next((assoc for assoc in states_for_v if assoc["c"] == c and assoc["i"] == i), None)
                 if match is not None:
                     vec = match["statePadded"] / np.sqrt(8)
-                    superVec[idx : idx + vec.size] = vec
-                    idx += vec.size
+                    superVec[idx:idx + block_len] = vec
+                # always move idx by block_len, even if missing
+                idx += block_len
 
-        yield v, superVec  # yield node index and its vector
+        yield v, superVec
 
-def compute_kernel_matrix(superLongVectorsGen, nPower=1, dtype=DTYPE):
-    """Compute kernel matrix row by row, streaming."""
-    # First, collect node vectors row by row
-    vecs_list = []
-    node_indices = []
-    print("Computing the Kernel Matrix...")
-    for v, vec in superLongVectorsGen:
-        print(f"Kernel Appendix: v: {v}/{nrNodes}")
-        vecs_list.append(vec)
-        node_indices.append(v)
+def compute_kernel_matrix(superLongVectorsByVGen, nPower=1, dtype=DTYPE):
+    """
+    Compute kernel matrix from generator without materializing all vectors in RAM.
+    """
+    print("Creating Kernel Matrix Table (streaming)...")
+    # Collect vectors into a list so we know nrNodes
+    vecs = list(superLongVectorsByVGen)   # O(n) in memory, but avoids O(n*d)
+    node_ids, superVecs = zip(*vecs)
+    nrNodes = len(superVecs)
 
-    # Stack them into a 2D array (rows = nodes)
-    trainVecs = np.stack(vecs_list, axis=0)
-    kernelMatrix = np.abs(trainVecs @ trainVecs.T) ** (2 * nPower)
-    return kernelMatrix.astype(dtype), node_indices
+    kernelMatrix = np.zeros((nrNodes, nrNodes), dtype=dtype)
+    # Compute row by row
+    for i in range(nrNodes):
+        vi = superVecs[i]
+        row = np.abs(np.dot(superVecs, vi)) ** (2 * nPower)
+        kernelMatrix[i, :] = row
+    print(f"Kernel matrix shape: {kernelMatrix.shape}")
+    return kernelMatrix, node_ids
 
 def plot_kernel_matrix(kernelMatrix, show=True):
     """Plot kernel matrix heatmap."""
@@ -591,40 +558,49 @@ def evaluate_predictions(trainLabels, predictedLabels, expectationValsAll, show=
 
 n, nrNodes, m, maxD, s, adjacencyList, nodeDegrees, nodeDegreesC1, mC1, sC1, p, P, featuresNorm, classLabels = input_data(graph_type)
 
-neighborsCheck = check_node(nodeCheck)
-check_feat_rotation(nodeCheck, neighborsCheck)
+if os.path.exists(KERNEL_FILE):
+    print(f"Loading precomputed kernel matrix from {KERNEL_FILE}...")
+    kernelMatrix = np.load(KERNEL_FILE)
+    node_ids = np.arange(kernelMatrix.shape[0])  # fallback if not saved separately
+else:
+    print("Computing kernel matrix from scratch...")
 
-print("Computing H, H2, H3, H4, H10...")
-H = hadamard(1)
-H2 = hadamard(2)
-H3 = hadamard(3)
-H4 = hadamard(4)
-H10 = hadamard(10)
-Hl = {1: H, 2: H2, 3: H3, 4: H4, 10: H10}.get(m, None)
-Hl = Hl.astype(DTYPE) # cast Hl to float32
-if Hl is None:
-    raise ValueError("Only m=1..4 or 10 supported")
-print("Finished.")
+    neighborsCheck = check_node(nodeCheck)
+    check_feat_rotation(nodeCheck, neighborsCheck)
 
-print("Creating firstHopStates...")
-firstHopStates = get_firstHopStates()
-print("Finished.")
-print("Creating firstHopSuperposedStates...")
-firstHopSuperposedStates = get_firstHopSuperposedStates(firstHopStates)
-print("Finished.")
-print("Creating secondHopStates...")
-secondHopStatesGen = get_secondHopStates(firstHopStates)
-print("Finished.")
-print("Creating secondHopSuperposedStates...")
-secondHopSuperposedStates = get_secondHopSuperposedStates(secondHopStatesGen)
-print("Finished.")
-print("Creating superLongVectorsByV...")
-superLongVectorsGen = get_superLongVectorsByVGen(firstHopSuperposedStates, secondHopSuperposedStates)
-print("Finished.")
+    print("Computing H, H2, H3, H4, H10...")
+    H = hadamard(1)
+    H2 = hadamard(2)
+    H3 = hadamard(3)
+    H4 = hadamard(4)
+    H10 = hadamard(10)
+    Hl = {1: H, 2: H2, 3: H3, 4: H4, 10: H10}.get(m, None)
+    Hl = Hl.astype(DTYPE) # cast Hl to float32
+    if Hl is None:
+        raise ValueError("Only m=1..4 or 10 supported")
+    print("Finished.")
 
-print("\nGot the data (embeddings). Start classification...")
-# trainVecs = trainVecs / np.linalg.norm(trainVecs, axis=1, keepdims=True) # Normalize vectors (not needed, if done correctly)
-kernelMatrix = compute_kernel_matrix(superLongVectorsGen)
+    print("Creating firstHopStates...")
+    firstHopStates = get_firstHopStates()
+    print("Finished.")
+    print("Creating firstHopSuperposedStates...")
+    firstHopSuperposedStates = get_firstHopSuperposedStates(firstHopStates)
+    print("Finished.")
+    print("Creating secondHopStates...")
+    secondHopStatesGen = get_secondHopStates(firstHopStates)
+    print("Finished.")
+    print("Creating secondHopSuperposedStates...")
+    secondHopSuperposedStates = get_secondHopSuperposedStates(secondHopStatesGen)
+    print("Finished.")
+    print("Creating superLongVectorsByVGen...")
+    superLongVectorsByVGen = get_superLongVectorsByVGen(firstHopSuperposedStates, secondHopSuperposedStates)
+    print("Finished.")
+
+    print("\nGot the data (embeddings). Start classification...")
+    kernelMatrix, node_ids = compute_kernel_matrix(superLongVectorsByVGen, nPower=1)
+    np.save(KERNEL_FILE, kernelMatrix)
+    print(f"Kernel matrix saved to {KERNEL_FILE}")
+
 plot_kernel_matrix(kernelMatrix, show=show)
 expectationValsAll = compute_expectation_values(kernelMatrix, classLabels, featuresNorm)
 predictedLabels = predict_labels(expectationValsAll)
