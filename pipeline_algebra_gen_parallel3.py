@@ -12,8 +12,8 @@ import os
 DTYPE = np.float32
 nodeCheck = 0 # 0-based
 show = True
-graph_type = "PPI" # "synthetic" # 
-randomEmbeddings = True
+graph_type = "synthetic" # "PPI" # 
+randomEmbeddings = False # True # 
 KERNEL_FILE = f"output/{graph_type}_kernel_matrix.npy"
 
 def input_data(graph_type = "synthetic", n = 7, m = 2, show = False):
@@ -464,113 +464,74 @@ def get_randomEmbeddings_streamed(nrNodes, s, seed=42):
     return by_node
 
 # -------------------------------------------------------------------------------
-# KernelMatrix
+# KernelMatrix (parallel, memory-safe)
 # -------------------------------------------------------------------------------
 
-def get_superLongVectorNode(v, firstHopSuperposedStates, secondHopSuperposedStates, random_factory=None):
-    """Fixed version that creates much smaller vectors."""
-    if random_factory is not None:
-        node_states = random_factory(v)
-        first_hop_v = [st for st in node_states if st["c"] == 1]
-        second_hop_v = [st for st in node_states if st["c"] == 2]
-    else:
-        first_hop_v = [assoc for assoc in firstHopSuperposedStates if assoc["v"] == v]
-        second_hop_v = [assoc for assoc in secondHopSuperposedStates if assoc["v"] == v]
-
-    # The problem: your original block_len is HUGE
-    # block_len = 2**5 * s**2  # This creates massive vectors!
-    
-    # Fix: Use the actual size of your states, don't over-allocate
-    max_state_size = 0
-    for assoc in first_hop_v + second_hop_v:
-        max_state_size = max(max_state_size, assoc["stateDegreeRotated"].size)
-    
-    # Use actual size instead of theoretical maximum
-    block_len = max_state_size
-    target_len = 2 * 4 * block_len  # Still 8 blocks but much smaller
-    
-    print(f"Node {v}: block_len={block_len}, target_len={target_len}, size={target_len*4/1024/1024:.1f}MB")
-
-    superVec = np.zeros(target_len, dtype=DTYPE)
-    
-    idx = 0
+def streamed_dot_product(states_a, states_b, nPower=1):
+    """Compute |<a|b>|^(2*nPower) without creating full superVecs."""
+    total_dot = 0.0
     for c in [1, 2]:
         for i in range(1, 5):
-            # Find matching state
-            match = None
-            for assoc in first_hop_v + second_hop_v:
-                if assoc["c"] == c and assoc["i"] == i:
-                    match = assoc
-                    break
-            
-            if match:
-                state_rot = match["stateDegreeRotated"]
-                # Copy actual data (no padding to huge size)
-                copy_len = min(state_rot.size, block_len)
-                superVec[idx:idx + copy_len] = state_rot[:copy_len]
-                
-                # Normalize this block
-                block_norm = np.linalg.norm(superVec[idx:idx + block_len])
-                if block_norm > 0:
-                    superVec[idx:idx + block_len] /= (block_norm * np.sqrt(8))
-            
-            idx += block_len
+            a_state = next(st for st in states_a if st["c"] == c and st["i"] == i)
+            b_state = next(st for st in states_b if st["c"] == c and st["i"] == i)
 
-    return superVec
+            vec_len = a_state["stateDegreeRotated"].size
+            chunk_size = 1024*1024
+            idx = 0
+            dot_val = 0.0
+            while idx < vec_len:
+                end = min(idx + chunk_size, vec_len)
+                dot_val += np.dot(a_state["stateDegreeRotated"][idx:end],
+                                  b_state["stateDegreeRotated"][idx:end])
+                idx = end
 
-def compute_kernel_matrix_safe(firstHopSuperposedStates, secondHopSuperposedStates, nPower=1, random_factory=None, dtype=DTYPE):
-    """Simple fix that just processes in small batches with correct vector sizes."""
-    
+            total_dot += (dot_val / (np.sqrt(8))) ** (2 * nPower)
+    return total_dot
+
+def compute_kernel_row(i, node_ids, firstHopSuperposedStates, secondHopSuperposedStates,
+                       random_factory=None, nPower=1):
+    """Compute one row of the kernel matrix."""
+    states_i = (random_factory(node_ids[i]) if random_factory else
+                [st for st in firstHopSuperposedStates + secondHopSuperposedStates
+                 if st["v"] == node_ids[i]])
+    row = np.zeros(len(node_ids), dtype=DTYPE)
+
+    for j in range(i, len(node_ids)):
+        states_j = (random_factory(node_ids[j]) if random_factory else
+                    [st for st in firstHopSuperposedStates + secondHopSuperposedStates
+                     if st["v"] == node_ids[j]])
+        val = streamed_dot_product(states_i, states_j, nPower=nPower)
+        row[j] = val
+        row[j] = val
+    return i, row
+
+def compute_kernel_matrix_safe(firstHopSuperposedStates, secondHopSuperposedStates,
+                                   nPower=1, random_factory=None, dtype=DTYPE, n_jobs=4):
+    """Compute full kernel matrix in parallel safely."""
     if random_factory is None:
-        # fallback for non-random embeddings
         node_set = {st["v"] for st in firstHopSuperposedStates} | {st["v"] for st in secondHopSuperposedStates}
         node_ids = sorted(node_set)
-        nrNodes = len(node_ids)
     else:
-        # in random mode
         nrNodes = 6850
         node_ids = list(range(1, nrNodes + 1))
-    
+
+    nrNodes = len(node_ids)
     kernelMatrix = np.zeros((nrNodes, nrNodes), dtype=dtype)
-    
-    # Process in very small batches to be safe
-    batch_size = 20  # Small batches
-    
-    print(f"Computing kernel matrix for {nrNodes} nodes in batches of {batch_size}...")
-    
-    for i in range(0, nrNodes, batch_size):
-        end_i = min(i + batch_size, nrNodes)
-        print(f"Processing nodes {i} to {end_i-1}...")
-        
-        # Compute vectors for this batch
-        batch_vectors = []
-        for idx in range(i, end_i):
-            vec = get_superLongVectorNode(node_ids[idx], firstHopSuperposedStates, secondHopSuperposedStates, random_factory)
-            batch_vectors.append(vec)
-        
-        # Compute kernel values within batch
-        for k1, vec1 in enumerate(batch_vectors):
-            for k2 in range(k1, len(batch_vectors)):
-                vec2 = batch_vectors[k2]
-                val = np.abs(np.dot(vec1, vec2)) ** (2 * nPower)
-                kernelMatrix[i + k1, i + k2] = val
-                kernelMatrix[i + k2, i + k1] = val
-        
-        # Compute kernel values with previous batches
-        for j in range(i):
-            vec_j = get_superLongVectorNode(node_ids[j], firstHopSuperposedStates, secondHopSuperposedStates)
-            for k, vec_k in enumerate(batch_vectors):
-                val = np.abs(np.dot(vec_k, vec_j)) ** (2 * nPower)
-                kernelMatrix[i + k, j] = val
-                kernelMatrix[j, i + k] = val
-            del vec_j
-        
-        # Clean up batch
-        del batch_vectors
-        import gc
-        gc.collect()
-    
-    print(f"Kernel matrix computation complete! Shape: {kernelMatrix.shape}")
+
+    print(f"Computing kernel matrix for {nrNodes} nodes in parallel with {n_jobs} jobs...")
+
+    results = Parallel(n_jobs=n_jobs, backend="loky")(
+        delayed(compute_kernel_row)(i, node_ids, firstHopSuperposedStates,
+                                    secondHopSuperposedStates, random_factory, nPower)
+        for i in range(nrNodes)
+    )
+
+    # Fill in symmetric matrix
+    for i, row in results:
+        kernelMatrix[i, i:] = row[i:]
+        kernelMatrix[i:, i] = row[i:]
+
+    print("Kernel matrix computation complete!")
     return kernelMatrix, node_ids
 
 # -------------------------------------------------------------------------------
