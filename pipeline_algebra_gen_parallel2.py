@@ -6,12 +6,13 @@ import seaborn as sns
 from collections import defaultdict
 from itertools import groupby
 from operator import itemgetter
+from joblib import Parallel, delayed
 import os
 # ---------- caching / dtype config ----------
 DTYPE = np.float32
 nodeCheck = 0 # 0-based
 show = True
-graph_type = "PPI" # "synthetic" # 
+graph_type = "synthetic" # "PPI" # 
 KERNEL_FILE = f"output/{graph_type}_kernel_matrix.npy"
 
 def input_data(graph_type = "synthetic", n = 7, m = 2, show = False):
@@ -281,144 +282,172 @@ def oracleX_kronecker(feat_vec, i, q=4):
     return result
 
 def get_firstHopStates():
-    '''
-        QMME Circuit: c=1: Feature Embeddings for (v, l, i)
-        First-hop neighborhood:
-        For each (v, l), get the 8 feature vectors (for each i, l)
-        of dimension 2^4 = 16 (corresponding to 4 ancilla rotations).
-    '''
-
-    firstHopStates = []
-
-    for v in range(nrNodes):
-        print(f"firstHopStates: v: {v}/{nrNodes-1}")
-        for l_idx in range(s):
-            # base feature vector (i = 1 / mean)
-            feat_vec = get_feature_rotation(v + 1, l_idx + 1) @ np.array([1, 0], dtype=DTYPE)
-            u_val = get_r(v, l_idx) + 1
-
-            for i in range(1, 5):
-                combined_vec = oracleX_kronecker(feat_vec, i)
-                firstHopStates.append({
-                    "v": v + 1,
-                    "i": i,
-                    "l": l_idx + 1,
-                    # "u": u_val,
-                    # "featVec": feat_vec,
-                    "state": combined_vec
-                })
-    return firstHopStates
-
-def get_firstHopSuperposedStates(firstHopStates):
-    firstHopSuperposedStates = []
-
-    firstHopStates_sorted = sorted(firstHopStates, key=lambda x: (x["v"], x["i"]))
-    for (v, i), group in groupby(firstHopStates_sorted, key=lambda x: (x["v"], x["i"])):
-        print(f"firstHopSuperposedStates: v: {v}/{nrNodes}, i: {i}")
-        states = list(group)
-        s_eff = len(states)
-        stateDim = 16  # dim of individual feat_vec
-
-        degRotVec = Wtheta(2 * np.arccos(1 / nodeDegrees[v - 1])) @ np.array([1, 0], dtype=DTYPE)
-        # preallocate final vector in one go
-        finalState = np.zeros(s_eff * stateDim * 2, dtype=DTYPE)
-
-        for idx_l, state in enumerate(states):
-            # apply Hadamard on the l register (simple average for 1D)
-            for idx_bit, val in enumerate(state["state"]):
-                val_h = val / np.sqrt(s_eff)
-                finalState_idx = (idx_l * stateDim + idx_bit) * 2
-                finalState[finalState_idx : finalState_idx+2] = val_h * degRotVec
-
-        # normalize in-place
-        finalState /= np.linalg.norm(finalState)
-
-        firstHopSuperposedStates.append({
-            "c": 1,
-            "v": v,
+    def process_one(v, l_idx, i):
+        # print(f"firstHopStates: v: {v}/{nrNodes}")
+        feat_vec = get_feature_rotation(v + 1, l_idx + 1) @ np.array([1, 0], dtype=DTYPE)
+        combined_vec = oracleX_kronecker(feat_vec, i)
+        return {
+            "v": v + 1,
             "i": i,
-            "stateDegreeRotated": finalState
-        })
+            "l": l_idx + 1,
+            "state": combined_vec
+        }
 
-    return firstHopSuperposedStates
+    tasks = [(v, l_idx, i) for v in range(nrNodes) for l_idx in range(s) for i in range(1, 5)]
+    results = Parallel(n_jobs=-1, prefer="threads")(delayed(process_one)(*args) for args in tasks)
+    return results
 
-def get_secondHopStates(firstHopStates):
-    '''
-        QMME Circuit: c=2: Feature Embeddings for (v, l1, l2, i) 
-        Second-hop neighborhood:
-        For each (v, l1, l2), get the 16 feature vectors (for each i, l1, l2)
-        of dimension 2^4 = 16 (4 ancilla rotations).
-    '''
-    # Group firstHopStates by v
+def process_group(v, i, states):
+    # print(f"firstHopSuperposedStates: v: {v}/{nrNodes}")
+    s_eff = len(states)
+    stateDim = 16  # dim of individual feat_vec
+
+    degRotVec = Wtheta(2 * np.arccos(1 / nodeDegrees[v - 1])) @ np.array([1, 0], dtype=DTYPE)
+    finalState = np.zeros(s_eff * stateDim * 2, dtype=DTYPE)
+
+    for idx_l, state in enumerate(states):
+        for idx_bit, val in enumerate(state["state"]):
+            val_h = val / np.sqrt(s_eff)
+            finalState_idx = (idx_l * stateDim + idx_bit) * 2
+            finalState[finalState_idx:finalState_idx+2] = val_h * degRotVec
+
+    finalState /= np.linalg.norm(finalState)
+
+    return {
+        "c": 1,
+        "v": v,
+        "i": i,
+        "stateDegreeRotated": finalState
+    }
+
+def get_firstHopSuperposedStates(firstHopStates, n_jobs=-1):
+    firstHopStates_sorted = sorted(firstHopStates, key=lambda x: (x["v"], x["i"]))
+    grouped = [(v, i, list(group)) for (v, i), group in groupby(firstHopStates_sorted, key=lambda x: (x["v"], x["i"]))]
+
+    print(f"firstHopSuperposedStates: {len(grouped)} groups to process")
+
+    results = Parallel(n_jobs=n_jobs, backend="loky")(
+        delayed(process_group)(v, i, states) for v, i, states in grouped
+    )
+
+    return results
+
+def get_secondHopStates_efficient(firstHopStates, chunk_size=100):
+    """Memory-efficient version that doesn't create millions of tasks."""
+    # Pre-index first hop states by vertex
     firstHopByV = defaultdict(list)
     for state in firstHopStates:
         firstHopByV[state["v"]].append(state)
+    
+    # Process in chunks to avoid memory explosion
+    print(f"Processing second hop states in chunks of {chunk_size} vertices...")
+    
+    v_values = list(range(1, nrNodes + 1))
+    total_chunks = (len(v_values) + chunk_size - 1) // chunk_size
+    
+    all_results = []
+    
+    for chunk_idx, start_idx in enumerate(range(0, len(v_values), chunk_size)):
+        end_idx = min(start_idx + chunk_size, len(v_values))
+        chunk_v_values = v_values[start_idx:end_idx]
+        
+        print(f"  Chunk {chunk_idx + 1}/{total_chunks}: vertices {chunk_v_values[0]}-{chunk_v_values[-1]}")
+        
+        # Process this chunk of vertices
+        chunk_results = []
+        for v0 in chunk_v_values:
+            for l0 in range(1, s + 1):
+                u0 = get_r(v0 - 1, l0 - 1) + 1
+                for state in firstHopByV.get(u0, []):
+                    chunk_results.append({
+                        "v": v0,
+                        "i": state["i"],
+                        "state": state["state"]
+                    })
+        
+        all_results.extend(chunk_results)
+    
+    print(f"Generated {len(all_results)} second hop states")
+    return all_results
 
-    for v0 in range(1, nrNodes + 1):
-        print(f"secondHopStates: v: {v0}/{nrNodes}")
-        for l0 in range(1, s + 1):
-            u0 = get_r(v0 - 1, l0 - 1) + 1
-            for state in firstHopByV.get(u0, []):
-                yield {
-                    "v": v0,
-                    "i": state["i"],
-                    # "l0": l0,
-                    # "u0": u0,
-                    # "l1": state["l"],
-                    # "u1": state["u"],
-                    "state": state["state"]
-                }
+def process_secondHopSuperposed_block(v, i, state_list):
+    # print(f"secondHopSuperposedStates: v: {v}/{nrNodes}")
+    c = 2
+    stateDim = state_list[0].size
+    s_eff = len(state_list)
+    degRotVec = Wtheta(2 * np.arccos(1 / nodeDegreesC1[v-1])) @ np.array([1, 0], dtype=DTYPE)
 
-def get_secondHopSuperposedStates(secondHopStatesGen):
+    final_len = s_eff * stateDim * 2
+    finalState = np.zeros(final_len, dtype=DTYPE)
+
+    for idx_l, vec in enumerate(state_list):
+        for idx_bit, val in enumerate(vec):
+            val_h = val / np.sqrt(s_eff)
+            finalState_idx = (idx_l * stateDim + idx_bit) * 2
+            finalState[finalState_idx : finalState_idx + 2] = val_h * degRotVec
+
+    finalState /= np.linalg.norm(finalState)
+
+    return {
+        "c": c,
+        "v": v,
+        "i": i,
+        "stateDegreeRotated": finalState
+    }
+
+def get_secondHopSuperposedStates_efficient(firstHopStates, n_jobs=4):
+    """Memory-efficient version that processes second hop states efficiently."""
+    
+    # Pre-index first hop states by vertex
+    firstHopByV = defaultdict(list)
+    for state in firstHopStates:
+        firstHopByV[state["v"]].append(state)
+    
+    print("Streaming and grouping second hop states by (v,i)...")
+    
+    # Group second hop states by (v,i) as we generate them
     grouped = defaultdict(list)
-    for st in secondHopStatesGen:
-        grouped[(st["v"], st["i"])].append(st["state"])
-
-    secondHopSuperposedStates = []
-
-    for (v, i), state_list in grouped.items():
-        print(f"secondHopSuperposedStates: v: {v}/{nrNodes}, i: {i}")
-        c = 2
-        stateDim = state_list[0].size
-        s_eff = len(state_list)
-        degRotVec = Wtheta(2 * np.arccos(1 / nodeDegreesC1[v-1])) @ np.array([1,0], dtype=DTYPE)
-
-        final_len = s_eff * stateDim * 2
-        finalState = np.zeros(final_len, dtype=DTYPE)
-
-        for idx_l, vec in enumerate(state_list):
-            for idx_bit, val in enumerate(vec):
-                val_h = val / np.sqrt(s_eff)
-                finalState_idx = (idx_l * stateDim + idx_bit) * 2
-                finalState[finalState_idx : finalState_idx + 2] = val_h * degRotVec
-
-        finalState /= np.linalg.norm(finalState)
-
-        secondHopSuperposedStates.append({
-            "c": c,
-            "v": v,
-            "i": i,
-            "stateDegreeRotated": finalState
-        })
-
-    return secondHopSuperposedStates
+    
+    # Process vertices in smaller batches to control memory
+    batch_size = 200
+    v_values = list(range(1, nrNodes + 1))
+    
+    for batch_start in range(0, len(v_values), batch_size):
+        batch_end = min(batch_start + batch_size, len(v_values))
+        batch_v_values = v_values[batch_start:batch_end]
+        
+        if batch_start % 1000 == 0:
+            print(f"  Processing vertices {batch_v_values[0]} to {batch_v_values[-1]}...")
+        
+        for v0 in batch_v_values:
+            for l0 in range(1, s + 1):
+                u0 = get_r(v0 - 1, l0 - 1) + 1
+                for state in firstHopByV.get(u0, []):
+                    key = (v0, state["i"])
+                    grouped[key].append(state["state"])
+    
+    print(f"Processing {len(grouped)} (v,i) groups with {n_jobs} parallel jobs...")
+    
+    # Process the grouped states in parallel with limited jobs
+    tasks = [(v, i, states) for (v, i), states in grouped.items()]
+    
+    results = Parallel(n_jobs=n_jobs, backend="loky")(
+        delayed(process_secondHopSuperposed_block)(v, i, states) for v, i, states in tasks
+    )
+    
+    return results
 
 def get_superLongVectorNode(v, firstHopSuperposedStates, secondHopSuperposedStates):
-    """
-    Compute superLongVector for a single node v on-demand.
-    This avoids storing all vectors in memory simultaneously.
-    """
-    # Filter states for this specific node
+    """Compute superLongVector for a single node v on-demand."""
     first_hop_v = [assoc for assoc in firstHopSuperposedStates if assoc["v"] == v]
     second_hop_v = [assoc for assoc in secondHopSuperposedStates if assoc["v"] == v]
-    
-    block_len = 2**5 * s**2         # each (c,i) block length
-    target_len = 2 * 4 * block_len  # 2 choices of c × 4 choices of i
-    
+
+    block_len = 2**5 * s**2
+    target_len = 2 * 4 * block_len
+
     states_for_v = []
-    
-    # pad c=1 states
-    for assoc in first_hop_v:
+
+    for assoc in first_hop_v + second_hop_v:
         state_rot = assoc["stateDegreeRotated"]
         padded = np.zeros(block_len, dtype=DTYPE)
         padded[:state_rot.size] = state_rot
@@ -426,113 +455,66 @@ def get_superLongVectorNode(v, firstHopSuperposedStates, secondHopSuperposedStat
         assoc_copy = assoc.copy()
         assoc_copy["statePadded"] = padded
         states_for_v.append(assoc_copy)
-    
-    # pad c=2 states
-    for assoc in second_hop_v:
-        state_rot = assoc["stateDegreeRotated"]
-        padded = np.zeros(block_len, dtype=DTYPE)
-        padded[:state_rot.size] = state_rot
-        padded /= np.linalg.norm(padded)
-        assoc_copy = assoc.copy()
-        assoc_copy["statePadded"] = padded
-        states_for_v.append(assoc_copy)
-    
-    # build fixed-length super vector
-    superVec = np.zeros(target_len, dtype=DTYPE) 
+
+    superVec = np.zeros(target_len, dtype=DTYPE)
     idx = 0
     for c in [1, 2]:
         for i in range(1, 5):
             match = next((assoc for assoc in states_for_v if assoc["c"] == c and assoc["i"] == i), None)
-            if match is not None:
-                vec = match["statePadded"] / np.sqrt(8)
-                superVec[idx:idx + block_len] = vec
-            # always move idx by block_len, even if missing
+            if match:
+                superVec[idx:idx + block_len] = match["statePadded"] / np.sqrt(8)
             idx += block_len
-    
+
     return superVec
 
-# Optimized chunked approach for 10GB RAM limit
-def compute_kernel_matrix(firstHopSuperposedStates, secondHopSuperposedStates, 
-                                          nPower=1, dtype=DTYPE):
-    """
-    Optimized chunked approach for ~10GB RAM limit.
-    - Uses symmetric matrix property (only compute upper triangle)
-    - Optimal chunk size for your RAM
-    - Progress tracking and memory cleanup
-    """
-    print("Creating Kernel Matrix Table (optimized chunked approach)...")
-    
-    # Get node list
-    node_set = set()
-    for state in firstHopSuperposedStates:
-        node_set.add(state["v"])
-    for state in secondHopSuperposedStates:
-        node_set.add(state["v"])
-    
-    node_ids = sorted(list(node_set))
+def compute_kernel_matrix_safe(firstHopSuperposedStates, secondHopSuperposedStates, nPower=1, dtype=DTYPE, n_jobs=2):
+    """Compute kernel matrix in RAM-safe parallel chunks with reduced parallelism."""
+    node_set = {st["v"] for st in firstHopSuperposedStates} | {st["v"] for st in secondHopSuperposedStates}
+    node_ids = sorted(node_set)
     nrNodes = len(node_ids)
-    
-    # Calculate optimal chunk size for 10GB RAM
-    vector_size_gb = (2 * 4 * (2**5 * s**2) * 4) / (1024**3)  # 4 bytes per float32
-    max_vectors_in_memory = int(8 / vector_size_gb)  # Use 8GB of 10GB available
-    chunk_size = min(max_vectors_in_memory, 20)  # Cap at 20 for reasonable computation time
-    
-    print(f"Vector size: {vector_size_gb:.2f} GB")
-    print(f"Optimal chunk size: {chunk_size}")
-    print(f"Computing kernel matrix for {nrNodes} nodes...")
-    
+
+    vector_size_gb = (2 * 4 * (2**5 * s**2) * 4) / (1024**3)  # float32
+    max_vectors_in_mem = max(1, int(6 / vector_size_gb))  # Use 6GB instead of 8GB for safety
+    chunk_size = min(max_vectors_in_mem, 5)  # Further reduce chunk size
+
+    print(f"Vector size: {vector_size_gb:.2f} GB | Chunk size: {chunk_size} | Parallel jobs: {n_jobs}")
+
     kernelMatrix = np.zeros((nrNodes, nrNodes), dtype=dtype)
-    
-    # Process in chunks - exploit symmetry
     total_chunks = (nrNodes + chunk_size - 1) // chunk_size
-    
+
     for i in range(0, nrNodes, chunk_size):
         end_i = min(i + chunk_size, nrNodes)
-        current_chunk = (i // chunk_size) + 1
-        
-        print(f"\n=== Chunk {current_chunk}/{total_chunks} ===")
-        print(f"Processing nodes {i} to {end_i-1}")
-        
-        # Compute vectors for current chunk
-        print("Computing chunk vectors...")
-        chunk_vecs = []
-        for idx in range(i, end_i):
-            node = node_ids[idx]
-            vec = get_superLongVectorNode(node, firstHopSuperposedStates, secondHopSuperposedStates)
-            chunk_vecs.append(vec)
-        
-        # Compute kernel values within chunk (diagonal blocks)
-        print("Computing intra-chunk kernel values...")
+        print(f"\n=== Chunk {i // chunk_size + 1}/{total_chunks} | Nodes {i}-{end_i-1} ===")
+
+        # Compute super vectors in parallel for this chunk with reduced n_jobs
+        chunk_vecs = Parallel(n_jobs=n_jobs, backend="loky")(
+            delayed(get_superLongVectorNode)(node_ids[idx], firstHopSuperposedStates, secondHopSuperposedStates)
+            for idx in range(i, end_i)
+        )
+
+        # Intra-chunk kernel values
         for k1, vec1 in enumerate(chunk_vecs):
-            for k2, vec2 in enumerate(chunk_vecs):
-                if i + k1 <= i + k2:  # Only upper triangle
-                    kernel_val = np.abs(np.dot(vec1, vec2)) ** (2 * nPower)
-                    kernelMatrix[i + k1, i + k2] = kernel_val
-                    if i + k1 != i + k2:  # Fill symmetric entry
-                        kernelMatrix[i + k2, i + k1] = kernel_val
-        
-        # Compute kernel values with previous chunks (off-diagonal blocks)
-        print("Computing inter-chunk kernel values...")
-        for j in range(0, i):  # Only process previous chunks
-            node_j = node_ids[j]
-            vec_j = get_superLongVectorNode(node_j, firstHopSuperposedStates, secondHopSuperposedStates)
-            
+            for k2 in range(k1, len(chunk_vecs)):
+                vec2 = chunk_vecs[k2]
+                val = np.abs(np.dot(vec1, vec2)) ** (2 * nPower)
+                kernelMatrix[i + k1, i + k2] = val
+                kernelMatrix[i + k2, i + k1] = val
+
+        # Inter-chunk kernel values with previous nodes
+        for j in range(0, i):
+            vec_j = get_superLongVectorNode(node_ids[j], firstHopSuperposedStates, secondHopSuperposedStates)
             for k, vec_i in enumerate(chunk_vecs):
-                kernel_val = np.abs(np.dot(vec_i, vec_j)) ** (2 * nPower)
-                kernelMatrix[i + k, j] = kernel_val
-                kernelMatrix[j, i + k] = kernel_val  # Symmetric entry
-            
+                val = np.abs(np.dot(vec_i, vec_j)) ** (2 * nPower)
+                kernelMatrix[i + k, j] = val
+                kernelMatrix[j, i + k] = val
             del vec_j
-        
-        # Clean up chunk vectors
+
         del chunk_vecs
-        
-        # Progress update
-        progress = (current_chunk / total_chunks) * 100
-        print(f"Progress: {progress:.1f}% complete")
-    
-    print(f"\nKernel matrix computation complete!")
-    print(f"Final kernel matrix shape: {kernelMatrix.shape}")
+        import gc
+        gc.collect()
+        print(f"Progress: {min(100, (i + chunk_size)/nrNodes*100):.1f}%")
+
+    print(f"\nKernel matrix computation complete! Shape: {kernelMatrix.shape}")
     return kernelMatrix, node_ids
 
 def plot_kernel_matrix(kernelMatrix, show=True):
@@ -641,21 +623,16 @@ else:
         raise ValueError("Only m=1..4 or 10 supported")
     print("Finished.")
 
-    print("Creating firstHopStates...")
+    print("Creating firstHopStates and firstHopSuperposedStates...")
     firstHopStates = get_firstHopStates()
-    print("Finished.")
-    print("Creating firstHopSuperposedStates...")
     firstHopSuperposedStates = get_firstHopSuperposedStates(firstHopStates)
     print("Finished.")
-    print("Creating secondHopStates...")
-    secondHopStatesGen = get_secondHopStates(firstHopStates)
-    print("Finished.")
-    print("Creating secondHopSuperposedStates...")
-    secondHopSuperposedStates = get_secondHopSuperposedStates(secondHopStatesGen)
+    print("Creating secondHopSuperposedStates (memory-efficient)...")
+    secondHopSuperposedStates = get_secondHopSuperposedStates_efficient(firstHopStates, n_jobs=4)
     print("Finished.")
 
     print("\nGot the data (embeddings). Start classification...")
-    kernelMatrix, node_ids = compute_kernel_matrix(firstHopSuperposedStates, secondHopSuperposedStates, nPower=1)
+    kernelMatrix, node_ids = compute_kernel_matrix_safe(firstHopSuperposedStates, secondHopSuperposedStates, nPower=1, n_jobs=2)
     np.save(KERNEL_FILE, kernelMatrix)
     print(f"Kernel matrix saved to {KERNEL_FILE}")
 
