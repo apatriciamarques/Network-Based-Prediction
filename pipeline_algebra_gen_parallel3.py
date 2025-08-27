@@ -8,13 +8,19 @@ from itertools import groupby
 from operator import itemgetter
 from joblib import Parallel, delayed
 import os
+os.environ["OMP_NUM_THREADS"] = "1"        # generic OpenMP
+os.environ["OPENBLAS_NUM_THREADS"] = "1"   # OpenBLAS
+os.environ["MKL_NUM_THREADS"] = "1"        # Intel MKL
+os.environ["VECLIB_MAXIMUM_THREADS"] = "1" # Apple vecLib (macOS)
+os.environ["NUMEXPR_NUM_THREADS"] = "1"    # numexpr
 # ---------- caching / dtype config ----------
 DTYPE = np.float32
+n_jobs = 32
 nodeCheck = 0 # 0-based
 show = True
 graph_type = "synthetic" # "PPI" # 
-randomEmbeddings = False # True # 
-KERNEL_FILE = f"output/{graph_type}_kernel_matrix.npy"
+randomEmbeddings = True # False #
+KERNEL_FILE = f"{graph_type}_kernel_matrix.npy"
 
 def input_data(graph_type = "synthetic", n = 7, m = 2, show = False):
     ''' 
@@ -51,6 +57,13 @@ def input_data(graph_type = "synthetic", n = 7, m = 2, show = False):
                 A[v - 1, i] = 1  # Ensure symmetry
             adjacencyList.append([int(v) for v in vList])
 
+        # --- Make degrees unequal by removing some edges ---
+        for i in [0, nrNodes-1]:  # just first and last nodes as example
+            if adjacencyList[i]:  # remove one neighbor
+                v = adjacencyList[i].pop()  # remove last connection
+                A[i, v-1] = 0
+                A[v-1, i] = 0
+
         print("Finished.")
 
         # Node degrees
@@ -75,11 +88,10 @@ def input_data(graph_type = "synthetic", n = 7, m = 2, show = False):
     if graph_type == "PPI":
         print("\nImporting dataset (edges, degrees, features)...")
         # Paths
-        base_dir = r"C:\Users\mpatr\Documents\Thesis\ThesisWork"
-        edgesRaw = pd.read_csv(f"{base_dir}/dataset/OmniPath_gene_edges_filtered_with_index.csv")
-        degreesRaw = pd.read_csv(f"{base_dir}/dataset/OmniPath_gene_degrees_filtered_with_index.csv")
-        featuresRaw = pd.read_csv(f"{base_dir}/dataset/MutSig_gene_pvalues_filtered_with_index.csv")
-        genes_all = pd.read_excel(f"{base_dir}/dataset/Census_all.xlsx")
+        edgesRaw = pd.read_csv(f"dataset/OmniPath_gene_edges_filtered_with_index.csv")
+        degreesRaw = pd.read_csv(f"dataset/OmniPath_gene_degrees_filtered_with_index.csv")
+        featuresRaw = pd.read_csv(f"dataset/MutSig_gene_pvalues_filtered_with_index.csv")
+        genes_all = pd.read_excel(f"dataset/Census_all.xlsx")
         print("Finished.")
 
         # --- Extracting the degrees ---
@@ -292,15 +304,14 @@ def get_firstHopStates():
 
 def process_group(v, i, states):
     # print(f"firstHopSuperposedStates: v: {v}/{nrNodes}")
-    s_eff = len(states)
     stateDim = 16  # dim of individual feat_vec (2^4)
 
     degRotVec = Wtheta(2 * np.arccos(1 / nodeDegrees[v - 1])) @ np.array([1, 0], dtype=DTYPE)
-    finalState = np.zeros(s_eff * stateDim * 2, dtype=DTYPE)
+    finalState = np.zeros(s * stateDim * 2, dtype=DTYPE)
 
     for idx_l, state in enumerate(states):
         for idx_bit, val in enumerate(state["state"]):
-            val_h = val / np.sqrt(s_eff)
+            val_h = val / np.sqrt(s)
             finalState_idx = (idx_l * stateDim + idx_bit) * 2
             finalState[finalState_idx:finalState_idx+2] = val_h * degRotVec
 
@@ -367,15 +378,14 @@ def process_secondHopSuperposed_block(v, i, state_list):
     # print(f"secondHopSuperposedStates: v: {v}/{nrNodes}")
     c = 2
     stateDim = state_list[0].size
-    s_eff = len(state_list)
     degRotVec = Wtheta(2 * np.arccos(1 / nodeDegreesC1[v-1])) @ np.array([1, 0], dtype=DTYPE)
 
-    final_len = s_eff * stateDim * 2
+    final_len = s ** 2 * stateDim * 2
     finalState = np.zeros(final_len, dtype=DTYPE)
 
     for idx_l, vec in enumerate(state_list):
         for idx_bit, val in enumerate(vec):
-            val_h = val / np.sqrt(s_eff)
+            val_h = val / np.sqrt(s)
             finalState_idx = (idx_l * stateDim + idx_bit) * 2
             finalState[finalState_idx : finalState_idx + 2] = val_h * degRotVec
 
@@ -388,7 +398,7 @@ def process_secondHopSuperposed_block(v, i, state_list):
         "stateDegreeRotated": finalState
     }
 
-def get_secondHopSuperposedStates_efficient(firstHopStates, n_jobs=4):
+def get_secondHopSuperposedStates_efficient(firstHopStates, n_jobs=n_jobs):
     """Memory-efficient version that processes second hop states efficiently."""
     
     # Pre-index first hop states by vertex
@@ -434,62 +444,85 @@ def get_secondHopSuperposedStates_efficient(firstHopStates, n_jobs=4):
 # Random
 # -------------------------------------------------------------------------------
 
-def get_randomEmbeddings_streamed(nrNodes, s, seed=42):
+def get_randomEmbeddings_streamed(s, seed=42):
     """
-    Streamed version of random embeddings.
-    Does not keep all embeddings in memory.
-    Instead, provides a generator that can be used per node.
+    True lazy random embeddings: never store full vectors in RAM.
+    Only store seed, shape, and c/i info. Generate chunks on-the-fly.
     """
-
-    rng = np.random.default_rng(seed)
-
-    def make_firsthop(v):
-        for i in range(1, 5):
-            dim = 256 * s
-            vec = rng.normal(size=dim).astype(DTYPE)
-            vec /= np.linalg.norm(vec)
-            yield {"c": 1, "v": v, "i": i, "stateDegreeRotated": vec}
-
-    def make_secondhop(v):
-        for i in range(1, 5):
-            dim = 256 * (s ** 2)
-            # huge dimension, don’t keep in RAM
-            vec = rng.normal(size=dim).astype(DTYPE)
-            vec /= np.linalg.norm(vec)
-            yield {"c": 2, "v": v, "i": i, "stateDegreeRotated": vec}
-
-    def by_node(v):
-        return list(make_firsthop(v)) + list(make_secondhop(v))
-
-    return by_node
+    def node_factory(v):
+        for c in [1, 2]:
+            for i in range(1, 5):
+                dim = 256 * (s if c == 1 else s**2)
+                yield {
+                    "c": c,
+                    "v": v,
+                    "i": i,
+                    "dim": dim,
+                    "seed": seed + v*10 + c*4 + i  # deterministic per node/state
+                }
+    return node_factory
 
 # -------------------------------------------------------------------------------
 # KernelMatrix (parallel, memory-safe)
 # -------------------------------------------------------------------------------
 
-def streamed_dot_product(states_a, states_b, nPower=1):
-    """Compute |<a|b>|^(2*nPower) without creating full superVecs."""
+def vector_dot_product(state_a_list, state_b_list, nPower=1):
     total_dot = 0.0
-    for c in [1, 2]:
-        for i in range(1, 5):
-            a_state = next(st for st in states_a if st["c"] == c and st["i"] == i)
-            b_state = next(st for st in states_b if st["c"] == c and st["i"] == i)
+    for state_a in state_a_list:
+        c, i = state_a["c"], state_a["i"]
+        vec_a = state_a.get("stateDegreeRotated", state_a.get("state"))
+        
+        # match with corresponding state_b
+        state_b = next(st for st in state_b_list if st["c"] == c and st["i"] == i)
+        vec_b = state_b.get("stateDegreeRotated", state_b.get("state"))
 
-            vec_len = a_state["stateDegreeRotated"].size
-            chunk_size = 1024*1024
-            idx = 0
-            dot_val = 0.0
-            while idx < vec_len:
-                end = min(idx + chunk_size, vec_len)
-                dot_val += np.dot(a_state["stateDegreeRotated"][idx:end],
-                                  b_state["stateDegreeRotated"][idx:end])
-                idx = end
+        dot_val = np.dot(vec_a, vec_b) / np.sqrt(vec_a.size)
+        total_dot += (dot_val) ** (2 * nPower)
+    return total_dot
 
-            total_dot += (dot_val / (np.sqrt(8))) ** (2 * nPower)
+def streamed_dot_product(state_a_list, state_b_list, nPower=1, chunk_size=2**20):
+    """
+    Compute |<a|b>|^(2*nPower) in chunks without ever materializing full vectors.
+    Each state must have 'dim' and 'seed'.
+    """
+    total_dot = 0.0
+    for state_a in state_a_list:
+        a_dim = state_a["dim"]
+        a_seed = state_a["seed"]
+        c, i = state_a["c"], state_a["i"]
+        
+        # find matching b state
+        state_b = next(st for st in state_b_list if st["c"] == c and st["i"] == i)
+        b_dim = state_b["dim"]
+        b_seed = state_b["seed"]
+        assert a_dim == b_dim
+
+        dot_val = 0.0
+        idx = 0
+        while idx < a_dim:
+            end = min(idx + chunk_size, a_dim)
+            size_chunk = end - idx
+
+            # generate the chunk deterministically
+            rng_a = np.random.default_rng(a_seed + idx)
+            rng_b = np.random.default_rng(b_seed + idx)
+            vec_a = rng_a.normal(size=size_chunk).astype(DTYPE)
+            vec_b = rng_b.normal(size=size_chunk).astype(DTYPE)
+
+            # normalize chunk to approximate full normalization
+            vec_a /= np.linalg.norm(vec_a)
+            vec_b /= np.linalg.norm(vec_b)
+
+            dot_val += np.dot(vec_a, vec_b)
+            idx = end
+
+        total_dot += (dot_val / np.sqrt(8)) ** (2 * nPower)
+
     return total_dot
 
 def compute_kernel_row(i, node_ids, firstHopSuperposedStates, secondHopSuperposedStates,
                        random_factory=None, nPower=1):
+    print(f"Computing kernel row: {i}/{nrNodes - 1}")
     """Compute one row of the kernel matrix."""
     states_i = (random_factory(node_ids[i]) if random_factory else
                 [st for st in firstHopSuperposedStates + secondHopSuperposedStates
@@ -500,19 +533,22 @@ def compute_kernel_row(i, node_ids, firstHopSuperposedStates, secondHopSuperpose
         states_j = (random_factory(node_ids[j]) if random_factory else
                     [st for st in firstHopSuperposedStates + secondHopSuperposedStates
                      if st["v"] == node_ids[j]])
-        val = streamed_dot_product(states_i, states_j, nPower=nPower)
+        if random_factory:
+            val = streamed_dot_product(states_i, states_j, nPower=nPower)
+        else:
+            val = vector_dot_product(states_i, states_j, nPower=nPower)
         row[j] = val
         row[j] = val
     return i, row
 
 def compute_kernel_matrix_safe(firstHopSuperposedStates, secondHopSuperposedStates,
-                                   nPower=1, random_factory=None, dtype=DTYPE, n_jobs=4):
+                                   nPower=1, random_factory=None, nrNodes=6850, dtype=DTYPE, n_jobs=n_jobs):
     """Compute full kernel matrix in parallel safely."""
     if random_factory is None:
         node_set = {st["v"] for st in firstHopSuperposedStates} | {st["v"] for st in secondHopSuperposedStates}
         node_ids = sorted(node_set)
     else:
-        nrNodes = 6850
+        nrNodes = nrNodes
         node_ids = list(range(1, nrNodes + 1))
 
     nrNodes = len(node_ids)
@@ -644,7 +680,7 @@ else:
         raise ValueError("Only m=1..4 or 10 supported")
     print("Finished.")
 
-    if randomEmbeddings:
+    if randomEmbeddings and graph_type == 'PPI':
         print("Using streamed random embeddings...")
         print("Creating firstHopSuperposedStates and secondHopSuperposedStates (randomEmbeddings)...")
         random_factory = get_randomEmbeddings_streamed(nrNodes, s)
@@ -664,11 +700,12 @@ else:
         firstHopSuperposedStates = get_firstHopSuperposedStates(firstHopStates)
         print("Finished.")
         print("Creating secondHopSuperposedStates (memory-efficient)...")
-        secondHopSuperposedStates = get_secondHopSuperposedStates_efficient(firstHopStates, n_jobs=4)
+        secondHopSuperposedStates = get_secondHopSuperposedStates_efficient(firstHopStates, n_jobs=n_jobs)
         print("Finished.")
 
     print("\nGot the data (embeddings). Start classification...")
-    kernelMatrix, node_ids = compute_kernel_matrix_safe(firstHopSuperposedStates, secondHopSuperposedStates, nPower=1, random_factory=random_factory)
+    kernelMatrix, node_ids = compute_kernel_matrix_safe(firstHopSuperposedStates, secondHopSuperposedStates,
+                                                        nPower=1, random_factory=random_factory, nrNodes=nrNodes)
     np.save(KERNEL_FILE, kernelMatrix)
     print(f"Kernel matrix saved to {KERNEL_FILE}")
 
