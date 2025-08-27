@@ -17,9 +17,9 @@ os.environ["NUMEXPR_NUM_THREADS"] = "1"    # numexpr
 DTYPE = np.float32
 n_jobs = 1
 nodeCheck = 0 # 0-based
-show = False
+show = True
 graph_type = "PPI" # "synthetic" # 
-randomEmbeddings = True # False # 
+randomEmbeddings = False # True # 
 KERNEL_FILE = f"{graph_type}_kernel_matrix.npy"
 
 def input_data(graph_type = "synthetic", n = 7, m = 2, show = False):
@@ -307,117 +307,51 @@ def get_firstHopStates():
     results = Parallel(n_jobs=-1, prefer="threads")(delayed(process_one)(*args) for args in tasks)
     return results
 
-def process_group(v, i, states):
-    ''' 
-        Input: v, i, l, state of dimension 2^4 (like applying oracle OX) 
-        Output: v, i, state of dimension s * 2^5 (first-hop embeddings)
-    '''
-    print(f"firstHopSuperposedStates: v: {v}/{nrNodes}")
-    stateDim = 16  # dim of individual feat_vec (2^4)
-
-    degRotVec = Wtheta(2 * np.arccos(1 / nodeDegrees[v - 1])) @ np.array([1, 0], dtype=DTYPE)
-    finalState = np.zeros(s * stateDim * 2, dtype=DTYPE)
-
-    for idx_l, state in enumerate(states):
-        for idx_bit, val in enumerate(state["state"]):
-            val_h = val / np.sqrt(s)
-            finalState_idx = (idx_l * stateDim + idx_bit) * 2
-            finalState[finalState_idx:finalState_idx+2] = val_h * degRotVec
-
-    finalState /= np.linalg.norm(finalState)
-
-    return {
-        "c": 1,
-        "v": v,
-        "i": i,
-        "stateDegreeRotated": finalState # size s * 2^5
-    }
-
-def get_firstHopSuperposedStates(firstHopStates, n_jobs=-1):
-    ''' 
-        Input: firstHopStates
-        Output: v, i, state of dimension s * 2^5 (first-hop embeddings)
-    '''
-    firstHopStates_sorted = sorted(firstHopStates, key=lambda x: (x["v"], x["i"]))
-    grouped = [(v, i, list(group)) for (v, i), group in groupby(firstHopStates_sorted, key=lambda x: (x["v"], x["i"]))]
-
-    print(f"firstHopSuperposedStates: {len(grouped)} groups to process")
-
-    results = Parallel(n_jobs=n_jobs, backend="threading")(
-        delayed(process_group)(v, i, states) for v, i, states in grouped
-    )
-
-    return results
-
-def process_secondHopSuperposed_block(v, i, state_list):
-    ''' 
-        Input: v, i, state_list
-        Output: c=2, v, i, state of dimension s ** 2 * 2^5 (second-hop embeddings)
-    '''
-    print(f"secondHopSuperposedStates: v: {v}/{nrNodes}")
-    c = 2
-    stateDim = state_list[0].size
-    degRotVec = Wtheta(2 * np.arccos(1 / nodeDegreesC1[v-1])) @ np.array([1, 0], dtype=DTYPE)
-
-    final_len = s ** 2 * stateDim * 2
-    finalState = np.zeros(final_len, dtype=DTYPE)
-
-    for idx_l, vec in enumerate(state_list):
-        for idx_bit, val in enumerate(vec):
-            val_h = val / np.sqrt(s)
-            finalState_idx = (idx_l * stateDim + idx_bit) * 2
-            finalState[finalState_idx : finalState_idx + 2] = val_h * degRotVec
-
-    finalState /= np.linalg.norm(finalState)
-
-    return {
-        "c": c,
-        "v": v,
-        "i": i,
-        "stateDegreeRotated": finalState
-    }
-
-def get_secondHopSuperposedStates(firstHopStates, n_jobs=n_jobs):
-    """Memory-efficient version that processes second hop states efficiently."""
-    
-    # Pre-index first hop states by vertex
-    firstHopByV = defaultdict(list)
-    for state in firstHopStates:
-        firstHopByV[state["v"]].append(state)
-    
-    print("Streaming and grouping second hop states by (v,i)...")
-    
-    # Group second hop states by (v,i) as we generate them
-    grouped = defaultdict(list)
-    
-    # Process vertices in smaller batches to control memory
-    batch_size = 200
-    v_values = list(range(1, nrNodes + 1))
-    
-    for batch_start in range(0, len(v_values), batch_size):
-        batch_end = min(batch_start + batch_size, len(v_values))
-        batch_v_values = v_values[batch_start:batch_end]
+def generate_node_state(v, c, i, s, firstHopStates=None):
+    """
+    Generate the first- or second-hop state for node v, for given c,i
+    Returns the vector for this block only (no generator sharing needed)
+    """
+    if c == 1:
+        # First-hop state
+        states_v_i = [st for st in firstHopStates if st["v"] == v and st["i"] == i]
+        stateDim = 16
+        degRotVec = Wtheta(2 * np.arccos(1 / nodeDegrees[v - 1])) @ np.array([1, 0], dtype=DTYPE)
+        finalState = np.zeros(s * stateDim * 2, dtype=DTYPE)
+        for idx_l, state in enumerate(states_v_i):
+            for idx_bit, val in enumerate(state["state"]):
+                val_h = val / np.sqrt(s)
+                final_idx = (idx_l * stateDim + idx_bit) * 2
+                finalState[final_idx:final_idx+2] = val_h * degRotVec
+        finalState /= np.linalg.norm(finalState)
+        return finalState
+    else:
+        # Second-hop state
+        # Gather first-hop states for neighbors
+        firstHopByV = defaultdict(list)
+        for st in firstHopStates:
+            firstHopByV[st["v"]].append(st)
         
-        if batch_start % 1000 == 0:
-            print(f"  Processing vertices {batch_v_values[0]} to {batch_v_values[-1]}...")
+        state_list = []
+        for l0 in range(1, s+1):
+            u0 = get_r(v-1, l0-1) + 1
+            for st in firstHopByV.get(u0, []):
+                if st["i"] == i:
+                    state_list.append(st["state"])
+        if not state_list:
+            return None  # skip if no states
         
-        for v0 in batch_v_values:
-            for l0 in range(1, s + 1):
-                u0 = get_r(v0 - 1, l0 - 1) + 1
-                for state in firstHopByV.get(u0, []):
-                    key = (v0, state["i"])
-                    grouped[key].append(state["state"])
-    
-    print(f"Processing {len(grouped)} (v,i) groups with {n_jobs} parallel jobs...") # issue here
-    
-    # Process the grouped states in parallel with limited jobs
-    tasks = [(v, i, states) for (v, i), states in grouped.items()]
-    
-    results = Parallel(n_jobs=n_jobs, backend="threading")( # changed here [27/08/2025 23:25]
-        delayed(process_secondHopSuperposed_block)(v, i, states) for v, i, states in tasks
-    )
-    
-    return results
+        stateDim = len(state_list[0])
+        degRotVec = Wtheta(2 * np.arccos(1 / nodeDegreesC1[v-1])) @ np.array([1, 0], dtype=DTYPE)
+        final_len = s**2 * stateDim * 2
+        finalState = np.zeros(final_len, dtype=DTYPE)
+        for idx_l, vec in enumerate(state_list):
+            for idx_bit, val in enumerate(vec):
+                val_h = val / np.sqrt(s)
+                final_idx = (idx_l * stateDim + idx_bit) * 2
+                finalState[final_idx:final_idx+2] = val_h * degRotVec
+        finalState /= np.linalg.norm(finalState)
+        return finalState
 
 # -------------------------------------------------------------------------------
 # Random
@@ -445,110 +379,50 @@ def get_randomEmbeddings_streamed(s, seed=42):
 # KernelMatrix (parallel, memory-safe)
 # -------------------------------------------------------------------------------
 
-def vector_dot_product(state_a_list, state_b_list, nPower=1):
-    total_dot = 0.0
-    for state_a in state_a_list:
-        c, i = state_a["c"], state_a["i"]
-        vec_a = state_a.get("stateDegreeRotated", state_a.get("state"))
-        
-        # match with corresponding state_b
-        state_b = next(st for st in state_b_list if st["c"] == c and st["i"] == i)
-        vec_b = state_b.get("stateDegreeRotated", state_b.get("state"))
-
-        dot_val = np.dot(vec_a, vec_b) / np.sqrt(vec_a.size)
-        total_dot += (dot_val) ** (2 * nPower)
-    return total_dot
-
-def streamed_dot_product(state_a_list, state_b_list, nPower=1, chunk_size=2**20):
+def compute_kernel_block(c, i, s, firstHopStates, node_ids, nPower=1):
     """
-    Compute |<a|b>|^(2*nPower) in chunks without ever materializing full vectors.
-    Each state must have 'dim' and 'seed'.
+    Compute kernel contribution for fixed (c,i) over all nodes.
     """
-    total_dot = 0.0
-    for state_a in state_a_list:
-        a_dim = state_a["dim"]
-        a_seed = state_a["seed"]
-        c, i = state_a["c"], state_a["i"]
-        
-        # find matching b state
-        state_b = next(st for st in state_b_list if st["c"] == c and st["i"] == i)
-        b_dim = state_b["dim"]
-        b_seed = state_b["seed"]
-        assert a_dim == b_dim
+    print(f"compute_kernel_block: c: {c}, i: {i}")
+    K_block = np.zeros((len(node_ids), len(node_ids)), dtype=DTYPE)
+    node_vectors = {}
 
-        dot_val = 0.0
-        idx = 0
-        while idx < a_dim:
-            end = min(idx + chunk_size, a_dim)
-            size_chunk = end - idx
+    # Precompute all node vectors for this block
+    for v in node_ids:
+        vec = generate_node_state(v, c, i, s, firstHopStates)
+        if vec is not None:
+            node_vectors[v] = vec
 
-            # generate the chunk deterministically
-            rng_a = np.random.default_rng(a_seed + idx)
-            rng_b = np.random.default_rng(b_seed + idx)
-            vec_a = rng_a.normal(size=size_chunk).astype(DTYPE)
-            vec_b = rng_b.normal(size=size_chunk).astype(DTYPE)
+    # Compute partial kernel
+    for idx_i, v_i in enumerate(node_ids):
+        vec_i = node_vectors.get(v_i)
+        if vec_i is None:
+            continue
+        for idx_j, v_j in enumerate(node_ids[idx_i:], start=idx_i):
+            vec_j = node_vectors.get(v_j)
+            if vec_j is None:
+                continue
+            dot_val = np.dot(vec_i, vec_j) / np.sqrt(vec_i.size)
+            K_block[idx_i, idx_j] = dot_val ** (2 * nPower)
+            K_block[idx_j, idx_i] = K_block[idx_i, idx_j]
 
-            # normalize chunk to approximate full normalization
-            vec_a /= np.linalg.norm(vec_a)
-            vec_b /= np.linalg.norm(vec_b)
+    return K_block
 
-            dot_val += np.dot(vec_a, vec_b)
-            idx = end
+def compute_kernel_matrix_blockwise(s, firstHopStates, nrNodes, nPower=1, n_jobs=-1):
+    node_ids = list(range(1, nrNodes+1))
+    K_total = np.zeros((nrNodes, nrNodes), dtype=DTYPE)
 
-        total_dot += (dot_val / np.sqrt(8)) ** (2 * nPower)
-
-    return total_dot
-
-def compute_kernel_row(i, node_ids, firstHopSuperposedStates, secondHopSuperposedStates,
-                       random_factory=None, nPower=1):
-    print(f"Computing kernel row: {i}/{nrNodes - 1}")
-    """Compute one row of the kernel matrix."""
-    states_i = (random_factory(node_ids[i]) if random_factory else
-                [st for st in firstHopSuperposedStates + secondHopSuperposedStates
-                 if st["v"] == node_ids[i]])
-    row = np.zeros(len(node_ids), dtype=DTYPE)
-
-    for j in range(i, len(node_ids)):
-        states_j = (random_factory(node_ids[j]) if random_factory else
-                    [st for st in firstHopSuperposedStates + secondHopSuperposedStates
-                     if st["v"] == node_ids[j]])
-        if random_factory:
-            val = streamed_dot_product(states_i, states_j, nPower=nPower)
-        else:
-            val = vector_dot_product(states_i, states_j, nPower=nPower)
-        row[j] = val
-        row[j] = val
-    return i, row
-
-def compute_kernel_matrix_safe(firstHopSuperposedStates, secondHopSuperposedStates,
-                                   nPower=1, random_factory=None, nrNodes=6850, dtype=DTYPE, n_jobs=n_jobs):
-    """Compute full kernel matrix in parallel safely."""
-    if random_factory is None:
-        node_set = {st["v"] for st in firstHopSuperposedStates} | {st["v"] for st in secondHopSuperposedStates}
-        node_ids = sorted(node_set)
-    else:
-        nrNodes = nrNodes
-        node_ids = list(range(1, nrNodes + 1))
-
-    nrNodes = len(node_ids)
-    kernelMatrix = np.zeros((nrNodes, nrNodes), dtype=dtype)
-
-    print(f"Computing kernel matrix for {nrNodes} nodes in parallel with {n_jobs} jobs...")
-
-    results = Parallel(n_jobs=n_jobs, backend="threading")(
-        delayed(compute_kernel_row)(i, node_ids, firstHopSuperposedStates,
-                                    secondHopSuperposedStates, random_factory, nPower)
-        for i in range(nrNodes)
+    # Parallel over (c,i) blocks
+    blocks = [(c, i) for c in [1,2] for i in range(1,5)]
+    results = Parallel(n_jobs=n_jobs)(
+        delayed(compute_kernel_block)(c, i, s, firstHopStates, node_ids, nPower) for c, i in blocks
     )
 
+    # Sum all contributions
+    for K_block in results:
+        K_total += K_block
 
-    # Fill in symmetric matrix
-    for i, row in results:
-        kernelMatrix[i, i:] = row[i:]
-        kernelMatrix[i:, i] = row[i:]
-
-    print("Kernel matrix computation complete!")
-    return kernelMatrix, node_ids
+    return K_total, node_ids
 
 # -------------------------------------------------------------------------------
 # Plotting
@@ -663,31 +537,18 @@ else:
     print("Finished.")
 
     if randomEmbeddings and graph_type == 'PPI':
-        print("Using streamed random embeddings...")
-        print("Creating firstHopSuperposedStates and secondHopSuperposedStates (randomEmbeddings)...")
-        random_factory = get_randomEmbeddings_streamed(nrNodes, s)
-
-        def get_embeddings_for_node(v):
-            return random_factory(v)
-
-        # pass this helper instead of huge precomputed lists
-        firstHopSuperposedStates = []
-        secondHopSuperposedStates = []
+        random_factory = get_randomEmbeddings_streamed(s)  # only s needed
+        kernelMatrix, node_ids = compute_kernel_matrix_blockwise(s, firstHopStates, nrNodes, nPower=1, n_jobs=-1)
         print("Finished.")
 
     else:
         random_factory = None
-        print("Creating firstHopStates and firstHopSuperposedStates...")
+        print("Creating firstHopStates...")
         firstHopStates = get_firstHopStates()
-        firstHopSuperposedStates = get_firstHopSuperposedStates(firstHopStates)
-        print("Finished.")
-        print("Creating secondHopSuperposedStates (memory-efficient)...")
-        secondHopSuperposedStates = get_secondHopSuperposedStates(firstHopStates, n_jobs=n_jobs)
         print("Finished.")
 
     print("\nGot the data (embeddings). Start classification...")
-    kernelMatrix, node_ids = compute_kernel_matrix_safe(firstHopSuperposedStates, secondHopSuperposedStates,
-                                                        nPower=1, random_factory=random_factory, nrNodes=nrNodes)
+    kernelMatrix, node_ids = compute_kernel_matrix_blockwise(s, firstHopStates, nrNodes, nPower=1, n_jobs=-1)
     np.save(KERNEL_FILE, kernelMatrix)
     print(f"Kernel matrix saved to {KERNEL_FILE}")
 
