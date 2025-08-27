@@ -18,8 +18,8 @@ DTYPE = np.float32
 n_jobs = 32
 nodeCheck = 0 # 0-based
 show = True
-graph_type = "synthetic" # "PPI" # 
-randomEmbeddings = True # False #
+graph_type = "PPI" # "synthetic" # 
+randomEmbeddings = False # True # 
 KERNEL_FILE = f"{graph_type}_kernel_matrix.npy"
 
 def input_data(graph_type = "synthetic", n = 7, m = 2, show = False):
@@ -556,11 +556,12 @@ def compute_kernel_matrix_safe(firstHopSuperposedStates, secondHopSuperposedStat
 
     print(f"Computing kernel matrix for {nrNodes} nodes in parallel with {n_jobs} jobs...")
 
-    results = Parallel(n_jobs=n_jobs, backend="loky")(
+    results = Parallel(n_jobs=n_jobs, backend="threading")(
         delayed(compute_kernel_row)(i, node_ids, firstHopSuperposedStates,
                                     secondHopSuperposedStates, random_factory, nPower)
         for i in range(nrNodes)
     )
+
 
     # Fill in symmetric matrix
     for i, row in results:
