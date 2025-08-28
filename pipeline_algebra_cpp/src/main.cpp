@@ -1,12 +1,14 @@
 #include <algorithm>
 #include <cblas.h> // Link with -lblas or Intel MKL
 #include <cmath>
+#include <cnpy.h>
 #include <fstream>
 #include <iomanip>
 #include <iostream>
 #include <iterator>
 #include <map>
 #include <numeric>
+#include <omp.h>
 #include <set>
 #include <sstream>
 #include <string>
@@ -16,6 +18,65 @@
 #include "pipeline_utils.hpp"
 
 // Boost Graph Library includes
+//
+//
+//
+//
+
+// Fast integer power function (avoid std::pow in hot loop)
+inline dtype fast_pow(dtype base, int exp) {
+  if (exp == 0)
+    return 1.0;
+  if (exp == 1)
+    return base;
+  if (exp == 2)
+    return base * base;
+  if (exp == 4) {
+    dtype sq = base * base;
+    return sq * sq;
+  }
+  if (exp == 6) {
+    dtype sq = base * base;
+    return sq * sq * sq;
+  }
+  if (exp == 8) {
+    dtype sq = base * base;
+    dtype qu = sq * sq;
+    return qu * qu;
+  }
+
+  // Binary exponentiation for larger powers
+  dtype result = 1.0;
+  dtype current_power = base;
+  while (exp > 0) {
+    if (exp & 1)
+      result *= current_power;
+    current_power *= current_power;
+    exp >>= 1;
+  }
+  return result;
+}
+
+void save_matrix_npy(const Matrix &mat, const std::string &filename) {
+  if (mat.empty() || mat[0].empty()) {
+    throw std::runtime_error("Matrix is empty!");
+  }
+
+  size_t rows = mat.size();
+  size_t cols = mat[0].size();
+
+  // Flatten row-major
+  std::vector<dtype> flat;
+  flat.reserve(rows * cols);
+  for (const auto &row : mat) {
+    if (row.size() != cols)
+      throw std::runtime_error("Inconsistent row size");
+    flat.insert(flat.end(), row.begin(), row.end());
+  }
+
+  // Save as (rows, cols) shaped array
+  cnpy::npy_save(filename, flat.data(), {rows, cols}, "w");
+}
 
 void printMatrix(const Matrix &M, const std::string &name = "") {
   if (!name.empty()) {
@@ -754,12 +815,12 @@ Matrix compute_kernel_block_batched(
     const std::vector<int> &nodeDegrees, const std::vector<int> &nodeDegreesC1,
     int nPower = 1, int batch_size = -1) {
 
-  std::cout << "compute_kernel_block_batched: c=" << c << ", i=" << i
+  std::cout << "Compute_kernel_block_batched: c=" << c << ", i=" << i
             << std::endl;
 
   // Adaptive batch size
   if (batch_size <= 0) {
-    batch_size = (c == 1 ? 500 : 50);
+    batch_size = (c == 1 ? 7000 : 250);
   }
 
   int n_nodes = static_cast<int>(node_ids.size());
@@ -776,7 +837,7 @@ Matrix compute_kernel_block_batched(
     // Generate vectors for batch i
     std::unordered_map<int, std::vector<dtype>> batch_i_vectors;
     for (int v : batch_i_ids) {
-      std::cout << "    Node i: " << v << "/" << (n_nodes - 1) << std::endl;
+      // std::cout << "    Node i: " << v << "/" << (n_nodes - 1) << std::endl;
       auto vec = generate_node_state(v, c, i, s, firstHopStates, data,
                                      nodeDegrees, nodeDegreesC1);
       if (vec.empty()) {
@@ -796,16 +857,20 @@ Matrix compute_kernel_block_batched(
       std::vector<int> batch_j_ids(node_ids.begin() + start_j,
                                    node_ids.begin() + end_j);
 
+      std::cout << "Batch: row= " << start_i
+                << ", column= " << start_j 
+                << std::endl;
       // Generate vectors for batch j
       std::unordered_map<int, std::vector<dtype>> batch_j_vectors;
       for (int v : batch_j_ids) {
-        std::cout << "    Node j: " << v << "/" << (n_nodes - 1) << std::endl;
+        // std::cout << "    Node j: " << v << "/" << (n_nodes - 1) <<
+        // std::endl;
         auto vec = generate_node_state(v, c, i, s, firstHopStates, data,
                                        nodeDegrees, nodeDegreesC1);
         if (vec.empty()) {
           if (missing_nodes.find(v) == missing_nodes.end()) {
-            std::cout << "[DEBUG] Node " << v << " has no states for c=" << c
-                      << ", i=" << i << std::endl;
+            // std::cout << "[DEBUG] Node " << v << " has no states for c=" << c
+            //           << ", i=" << i << std::endl;
             missing_nodes.insert(v);
           }
         } else {
@@ -813,15 +878,39 @@ Matrix compute_kernel_block_batched(
         }
       }
 
-      // Compute kernel values between batches
+      // std::cout << "Computing Dot Products: c=" << c << ", i=" << i
+      //           << std::endl;
+
+      // Pre-compute expensive operations outside the parallel region
+      std::vector<dtype> sqrt_cache;
+      sqrt_cache.reserve(batch_i_ids.size());
       for (int idx_i = 0; idx_i < (int)batch_i_ids.size(); idx_i++) {
+        int v_i = batch_i_ids[idx_i];
+        auto it_i = batch_i_vectors.find(v_i);
+        if (it_i != batch_i_vectors.end()) {
+          sqrt_cache.push_back(1.0 / std::sqrt((dtype)it_i->second.size()));
+        } else {
+          sqrt_cache.push_back(0.0); // Invalid marker
+        }
+      }
+
+      // Compute kernel values between batches
+      // Main parallel loop
+#pragma omp parallel for schedule(dynamic, 1) collapse(1)
+      for (int idx_i = 0; idx_i < (int)batch_i_ids.size(); idx_i++) {
+        // Skip if pre-computation marked as invalid
+        if (sqrt_cache[idx_i] == 0.0)
+          continue;
+
         int v_i = batch_i_ids[idx_i];
         auto it_i = batch_i_vectors.find(v_i);
         if (it_i == batch_i_vectors.end())
           continue;
-        const auto &vec_i = it_i->second;
-        std::cout << "Dot Product: idx_i: " << idx_i << "\n";
 
+        const auto &vec_i = it_i->second;
+        dtype inv_sqrt_i = sqrt_cache[idx_i];
+
+        // Inner loop - not parallelized to avoid race conditions
         for (int idx_j = 0; idx_j < (int)batch_j_ids.size(); idx_j++) {
           int v_j = batch_j_ids[idx_j];
 
@@ -832,22 +921,27 @@ Matrix compute_kernel_block_batched(
           auto it_j = batch_j_vectors.find(v_j);
           if (it_j == batch_j_vectors.end())
             continue;
+
           const auto &vec_j = it_j->second;
 
+          // Use minimum size for safety
+          size_t min_size = std::min(vec_i.size(), vec_j.size());
+
+          // BLAS dot product (thread-safe)
           dtype dot_val =
-              cblas_sdot(vec_j.size(), vec_i.data(), 1, vec_j.data(), 1);
+              cblas_sdot(min_size, vec_i.data(), 1, vec_j.data(), 1);
 
-          // // Dot product
-          // dtype dot_val = 0.0;
-          // for (size_t k = 0; k < vec_i.size() && k < vec_j.size(); k++) {
-          //   dot_val += vec_i[k] * vec_j[k];
-          // }
-          dot_val /= std::sqrt((dtype)vec_i.size());
+          // Apply normalization
+          dot_val *= inv_sqrt_i;
 
-          dtype kernel_val = std::pow(dot_val, 2 * nPower);
+          // Fast power calculation
+          dtype kernel_val = fast_pow(dot_val, 2 * nPower);
 
           int global_i = start_i + idx_i;
           int global_j = start_j + idx_j;
+
+          // Write to matrix (no race condition since each thread writes unique
+          // indices)
           K_block[global_i][global_j] = kernel_val;
           K_block[global_j][global_i] = kernel_val; // symmetric
         }
@@ -1012,6 +1106,8 @@ int main() {
 
   auto kernelMatrix = compute_kernel_matrix_blockwise(
       s, firstHopStates, data.nrNodes, data, nodeDegrees, nodeDegreesC1);
+
+  save_matrix_npy(kernelMatrix.first, "kernel_matrix.npy");
 
   // Visualization and classification
   plot_kernel_matrix(kernelMatrix.first, show);
