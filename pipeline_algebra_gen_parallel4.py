@@ -1,5 +1,4 @@
 import numpy as np
-import math
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
@@ -19,7 +18,6 @@ n_jobs = 1
 nodeCheck = 0 # 0-based
 show = True
 graph_type = "PPI" # "synthetic" # 
-randomEmbeddings = False # True # 
 KERNEL_FILE = f"{graph_type}_kernel_matrix.npy"
 
 def input_data(graph_type = "synthetic", n = 7, m = 2, show = False):
@@ -58,11 +56,11 @@ def input_data(graph_type = "synthetic", n = 7, m = 2, show = False):
             adjacencyList.append([int(v) for v in vList])
 
         # --- Make degrees unequal by removing some edges ---
-        for i in [0, nrNodes-1]:  # just first and last nodes as example
-            if adjacencyList[i]:  # remove one neighbor
-                v = adjacencyList[i].pop()  # remove last connection
-                A[i, v-1] = 0
-                A[v-1, i] = 0
+        # for i in [0, nrNodes-1]:  # just first and last nodes as example
+        #     if adjacencyList[i]:  # remove one neighbor
+        #         v = adjacencyList[i].pop()  # remove last connection
+        #         A[i, v-1] = 0
+        #         A[v-1, i] = 0
 
         print("Finished.")
 
@@ -77,7 +75,12 @@ def input_data(graph_type = "synthetic", n = 7, m = 2, show = False):
         p = n  # Precision level
         P = 2 ** p  # Scaling factor
         features = np.linspace(1 - 1/P, 0, nrNodes)  # descending
-        featuresNorm = features
+        print("features.min():", features.min())
+        print("features.max():", features.max())
+        # featuresNorm = features
+        featuresNorm = (features - features.min()) / (features.max() - features.min())
+        print("features: ", features)
+        print("P:", P)
         featuresInt = np.round(featuresNorm * P).astype(int)
 
         # --- Parameters ---
@@ -143,6 +146,8 @@ def input_data(graph_type = "synthetic", n = 7, m = 2, show = False):
         print("Compute scaled features for binary encoding...")
         p = 7
         P = 2**p
+        print("features.min():", features.min())
+        print("features.max():", features.max())
         featuresNorm = (features - features.min()) / (features.max() - features.min())
         featuresInt = np.round(featuresNorm * P).astype(int)
         featuresCheck = featuresInt / P * (features.max() - features.min()) + features.min()
@@ -258,6 +263,15 @@ def check_feat_rotation(nodeCheck, neighborsCheck):
     print("Node:", nodeCheck)
     print("Neighbor:", neighborsCheck[0])
     print("Neighbor's FeatureNorm:", featuresNorm[neighborsCheck[0]])
+
+    # print("Neighbor:", neighborsCheck[1])
+    # print("Neighbor's FeatureNorm:", featuresNorm[neighborsCheck[1]])
+
+    # print("Neighbor:", neighborsCheck[2])
+    # print("Neighbor's FeatureNorm:", featuresNorm[neighborsCheck[2]])
+
+    # print("Neighbor:", neighborsCheck[3])
+    # print("Neighbor's FeatureNorm:", featuresNorm[neighborsCheck[3]])
     print(get_feature_rotation(nodeCheck + 1, 1))
 
 def oracleX_kronecker(feat_vec, i, q=4):
@@ -291,21 +305,21 @@ def oracleX_kronecker(feat_vec, i, q=4):
 #--------------------------------------------------------------------------------------
 
 def get_firstHopStates():
-    ''' Output: v, i, l, state of dimension 2^4 (like applying oracle OX) '''
+    ''' Output: indexed dict: firstHopStates[v][i] = list of states (with l info too) '''
     def process_one(v, l_idx, i):
-        print(f"firstHopStates: v: {v}/{nrNodes}")
+        print(f"firstHopStates: v: {v}/{nrNodes-1}")
         feat_vec = get_feature_rotation(v + 1, l_idx + 1) @ np.array([1, 0], dtype=DTYPE)
         combined_vec = oracleX_kronecker(feat_vec, i)
-        return {
-            "v": v + 1,
-            "i": i,
-            "l": l_idx + 1,
-            "state": combined_vec # size 2^4
-        }
+        return v + 1, i, l_idx + 1, combined_vec  # return tuple instead of dict
 
-    tasks = [(v, l_idx, i) for v in range(nrNodes) for l_idx in range(s) for i in range(1, 5)]
+    tasks = [(v, l_idx, i) for v in range(nrNodes + 1) for l_idx in range(s) for i in range(1, 5)] # did + 1 to deal with non-regular graphs
     results = Parallel(n_jobs=-1, prefer="threads")(delayed(process_one)(*args) for args in tasks)
-    return results
+
+    # Pre-index
+    firstHopStates = defaultdict(lambda: defaultdict(list))
+    for v, i, l, state in results:
+        firstHopStates[v][i].append({"l": l, "state": state})
+    return firstHopStates
 
 def generate_node_state(v, c, i, s, firstHopStates=None):
     """
@@ -314,7 +328,7 @@ def generate_node_state(v, c, i, s, firstHopStates=None):
     """
     if c == 1:
         # First-hop state
-        states_v_i = [st for st in firstHopStates if st["v"] == v and st["i"] == i]
+        states_v_i = firstHopStates.get(v, {}).get(i, [])
         stateDim = 16
         degRotVec = Wtheta(2 * np.arccos(1 / nodeDegrees[v - 1])) @ np.array([1, 0], dtype=DTYPE)
         finalState = np.zeros(s * stateDim * 2, dtype=DTYPE)
@@ -328,18 +342,15 @@ def generate_node_state(v, c, i, s, firstHopStates=None):
     else:
         # Second-hop state
         # Gather first-hop states for neighbors
-        firstHopByV = defaultdict(list)
-        for st in firstHopStates:
-            firstHopByV[st["v"]].append(st)
-        
         state_list = []
-        for l0 in range(1, s+1):
-            u0 = get_r(v-1, l0-1) + 1
-            for st in firstHopByV.get(u0, []):
-                if st["i"] == i:
-                    state_list.append(st["state"])
+        for l0 in range(1, s + 1):
+            u0 = get_r(v - 1, l0 - 1) + 1  # neighbor node
+            # Collect all first-hop states of neighbor u0 with same i
+            states_u0_i = firstHopStates.get(u0, {}).get(i, [])
+            for st in states_u0_i:
+                state_list.append(st["state"])
         if not state_list:
-            return None  # skip if no states
+            return None  # skip if no states (note here!!!)
         
         stateDim = len(state_list[0])
         degRotVec = Wtheta(2 * np.arccos(1 / nodeDegreesC1[v-1])) @ np.array([1, 0], dtype=DTYPE)
@@ -352,28 +363,6 @@ def generate_node_state(v, c, i, s, firstHopStates=None):
                 finalState[final_idx:final_idx+2] = val_h * degRotVec
         finalState /= np.linalg.norm(finalState)
         return finalState
-
-# -------------------------------------------------------------------------------
-# Random
-# -------------------------------------------------------------------------------
-
-def get_randomEmbeddings_streamed(s, seed=42):
-    """
-    True lazy random embeddings: never store full vectors in RAM.
-    Only store seed, shape, and c/i info. Generate chunks on-the-fly.
-    """
-    def node_factory(v):
-        for c in [1, 2]:
-            for i in range(1, 5):
-                dim = 256 * (s if c == 1 else s**2)
-                yield {
-                    "c": c,
-                    "v": v,
-                    "i": i,
-                    "dim": dim,
-                    "seed": seed + v*10 + c*4 + i  # deterministic per node/state
-                }
-    return node_factory
 
 # -------------------------------------------------------------------------------
 # KernelMatrix (parallel, memory-safe)
@@ -408,19 +397,82 @@ def compute_kernel_block(c, i, s, firstHopStates, node_ids, nPower=1):
 
     return K_block
 
-def compute_kernel_matrix_blockwise(s, firstHopStates, nrNodes, nPower=1, n_jobs=-1):
+def compute_kernel_block_batched(c, i, s, firstHopStates, node_ids, nPower=1, batch_size=None):
+    """
+    Compute kernel contribution for fixed (c,i) over all nodes using memory-efficient batches.
+    Skips nodes with None vectors and prints debug info for missing states.
+    """
+    # Adaptive batch size
+    if batch_size is None:
+        batch_size = 500 if c == 1 else 50 # 5  # first-hop small, second-hop huge # works for nrNodes = 100
+
+    print(f"compute_kernel_block_batched: c={c}, i={i}, batch_size={batch_size}")
+    n_nodes = len(node_ids)
+    K_block = np.zeros((n_nodes, n_nodes), dtype=DTYPE)
+    missing_nodes = set()  # track missing nodes to avoid repeated debug prints
+
+    # Process nodes in batches
+    for start_i in range(0, n_nodes, batch_size):
+        end_i = min(start_i + batch_size, n_nodes)
+        batch_i_ids = node_ids[start_i:end_i]
+
+        # Generate batch_i vectors safely
+        batch_i_vectors = {}
+        for v in batch_i_ids:
+            print(f"    Node i: {v}/{nrNodes - 1}") # Takes veryyyy long
+            vec = generate_node_state(v, c, i, s, firstHopStates)
+            if vec is None:
+                if v not in missing_nodes:
+                    print(f"[DEBUG] Node {v} has no states for c={c}, i={i}")
+                    missing_nodes.add(v)
+            else:
+                batch_i_vectors[v] = vec
+
+        for start_j in range(start_i, n_nodes, batch_size):
+            end_j = min(start_j + batch_size, n_nodes)
+            batch_j_ids = node_ids[start_j:end_j]
+
+            # Generate batch_j vectors safely
+            batch_j_vectors = {}
+            for v in batch_j_ids:
+                print(f"    Node j: {v}/{nrNodes - 1}")
+                vec = generate_node_state(v, c, i, s, firstHopStates)
+                if vec is None:
+                    if v not in missing_nodes:
+                        print(f"[DEBUG] Node {v} has no states for c={c}, i={i}")
+                        missing_nodes.add(v)
+                else:
+                    batch_j_vectors[v] = vec
+
+            # Compute kernel between batches
+            for idx_i, v_i in enumerate(batch_i_ids):
+                vec_i = batch_i_vectors.get(v_i)
+                if vec_i is None:
+                    continue
+                for idx_j, v_j in enumerate(batch_j_ids):
+                    if start_i == start_j and idx_j < idx_i:  # upper triangle only
+                        continue
+                    vec_j = batch_j_vectors.get(v_j)
+                    if vec_j is None:
+                        continue
+                    dot_val = np.dot(vec_i, vec_j) / np.sqrt(vec_i.size)
+                    K_block[start_i + idx_i, start_j + idx_j] = dot_val ** (2 * nPower)
+                    K_block[start_j + idx_j, start_i + idx_i] = K_block[start_i + idx_i, start_j + idx_j]
+
+    return K_block
+
+def compute_kernel_matrix_blockwise(s, firstHopStates, nrNodes, nPower=1, n_jobs=n_jobs):
     node_ids = list(range(1, nrNodes+1))
     K_total = np.zeros((nrNodes, nrNodes), dtype=DTYPE)
 
     # Parallel over (c,i) blocks
     blocks = [(c, i) for c in [1,2] for i in range(1,5)]
-    results = Parallel(n_jobs=n_jobs)(
-        delayed(compute_kernel_block)(c, i, s, firstHopStates, node_ids, nPower) for c, i in blocks
-    )
-
-    # Sum all contributions
-    for K_block in results:
-        K_total += K_block
+    # Run sequential accumulation instead of storing all results
+    for K_block in Parallel(n_jobs=n_jobs)(
+        delayed(compute_kernel_block_batched)(c, i, s, firstHopStates, node_ids, nPower) 
+        for c, i in blocks
+    ):
+        K_total += K_block   # add one block at a time, not after collecting all
 
     return K_total, node_ids
 
@@ -513,6 +565,8 @@ def evaluate_predictions(trainLabels, predictedLabels, expectationValsAll, show=
 n, nrNodes, m, maxD, s, adjacencyList, nodeDegrees, nodeDegreesC1, mC1, sC1, p, P, featuresNorm, classLabels = input_data(graph_type)
 # nrNodes = 6850
 # s = 2^10
+# nrNodes = nrNodes + 1
+# nrNodes = 100
 
 if os.path.exists(KERNEL_FILE):
     print(f"Loading precomputed kernel matrix from {KERNEL_FILE}...")
@@ -536,26 +590,21 @@ else:
         raise ValueError("Only m=1..4 or 10 supported")
     print("Finished.")
 
-    if randomEmbeddings and graph_type == 'PPI':
-        random_factory = get_randomEmbeddings_streamed(s)  # only s needed
-        kernelMatrix, node_ids = compute_kernel_matrix_blockwise(s, firstHopStates, nrNodes, nPower=1, n_jobs=-1)
-        print("Finished.")
+    random_factory = None
+    print("Creating firstHopStates...")
+    firstHopStates = get_firstHopStates()
+    print(firstHopStates)
+    print("Finished.")
 
-    else:
-        random_factory = None
-        print("Creating firstHopStates...")
-        firstHopStates = get_firstHopStates()
-        print("Finished.")
+#     print("\nGot the data (embeddings). Start classification...") # ISSUE
+#     kernelMatrix, node_ids = compute_kernel_matrix_blockwise(s, firstHopStates, nrNodes, nPower=1, n_jobs=n_jobs)
+#     np.save(KERNEL_FILE, kernelMatrix)
+#     print(f"Kernel matrix saved to {KERNEL_FILE}")
 
-    print("\nGot the data (embeddings). Start classification...")
-    kernelMatrix, node_ids = compute_kernel_matrix_blockwise(s, firstHopStates, nrNodes, nPower=1, n_jobs=-1)
-    np.save(KERNEL_FILE, kernelMatrix)
-    print(f"Kernel matrix saved to {KERNEL_FILE}")
-
-plot_kernel_matrix(kernelMatrix, show=show)
-expectationValsAll = compute_expectation_values(kernelMatrix, classLabels, featuresNorm)
-predictedLabels = predict_labels(expectationValsAll)
-metrics, results = evaluate_predictions(classLabels, predictedLabels, expectationValsAll, show=show)
-print("\nMetrics:")
-for k, v in metrics.items():
-    print(f"  {k}: {v:.4f}")
+# plot_kernel_matrix(kernelMatrix, show=show)
+# expectationValsAll = compute_expectation_values(kernelMatrix, classLabels, featuresNorm)
+# predictedLabels = predict_labels(expectationValsAll)
+# metrics, results = evaluate_predictions(classLabels, predictedLabels, expectationValsAll, show=show)
+# print("\nMetrics:")
+# for k, v in metrics.items():
+#     print(f"  {k}: {v:.4f}")
