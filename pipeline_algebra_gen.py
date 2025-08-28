@@ -11,7 +11,7 @@ import os
 DTYPE = np.float32
 nodeCheck = 0 # 0-based
 show = True
-graph_type = "PPI" # "synthetic" # 
+graph_type = "synthetic" # "PPI" # 
 KERNEL_FILE = f"output/{graph_type}_kernel_matrix.npy"
 
 def input_data(graph_type = "synthetic", n = 7, m = 2, show = False):
@@ -48,6 +48,13 @@ def input_data(graph_type = "synthetic", n = 7, m = 2, show = False):
                 A[i, v - 1] = 1
                 A[v - 1, i] = 1  # Ensure symmetry
             adjacencyList.append([int(v) for v in vList])
+
+        # --- Make degrees unequal by removing some edges ---
+        for i in [0, nrNodes-1]:  # just first and last nodes as example
+            if adjacencyList[i]:  # remove one neighbor
+                v = adjacencyList[i].pop()  # remove last connection
+                A[i, v-1] = 0
+                A[v-1, i] = 0
 
         print("Finished.")
 
@@ -316,17 +323,16 @@ def get_firstHopSuperposedStates(firstHopStates):
     for (v, i), group in groupby(firstHopStates_sorted, key=lambda x: (x["v"], x["i"])):
         print(f"firstHopSuperposedStates: v: {v}/{nrNodes}, i: {i}")
         states = list(group)
-        s_eff = len(states)
-        stateDim = 16  # dim of individual feat_vec
+        stateDim = 16  # dim of individual feat_vec (2^4)
 
         degRotVec = Wtheta(2 * np.arccos(1 / nodeDegrees[v - 1])) @ np.array([1, 0], dtype=DTYPE)
         # preallocate final vector in one go
-        finalState = np.zeros(s_eff * stateDim * 2, dtype=DTYPE)
+        finalState = np.zeros(s * stateDim * 2, dtype=DTYPE)
 
         for idx_l, state in enumerate(states):
             # apply Hadamard on the l register (simple average for 1D)
             for idx_bit, val in enumerate(state["state"]):
-                val_h = val / np.sqrt(s_eff)
+                val_h = val / np.sqrt(s)
                 finalState_idx = (idx_l * stateDim + idx_bit) * 2
                 finalState[finalState_idx : finalState_idx+2] = val_h * degRotVec
 
@@ -380,15 +386,14 @@ def get_secondHopSuperposedStates(secondHopStatesGen):
         print(f"secondHopSuperposedStates: v: {v}/{nrNodes}, i: {i}")
         c = 2
         stateDim = state_list[0].size
-        s_eff = len(state_list)
         degRotVec = Wtheta(2 * np.arccos(1 / nodeDegreesC1[v-1])) @ np.array([1,0], dtype=DTYPE)
 
-        final_len = s_eff * stateDim * 2
+        final_len = s ** 2 * stateDim * 2
         finalState = np.zeros(final_len, dtype=DTYPE)
 
         for idx_l, vec in enumerate(state_list):
             for idx_bit, val in enumerate(vec):
-                val_h = val / np.sqrt(s_eff)
+                val_h = val / s
                 finalState_idx = (idx_l * stateDim + idx_bit) * 2
                 finalState[finalState_idx : finalState_idx + 2] = val_h * degRotVec
 

@@ -77,8 +77,8 @@ def input_data(graph_type = "synthetic", n = 7, m = 2, show = False):
         features = np.linspace(1 - 1/P, 0, nrNodes)  # descending
         print("features.min():", features.min())
         print("features.max():", features.max())
-        # featuresNorm = features
-        featuresNorm = (features - features.min()) / (features.max() - features.min())
+        featuresNorm = features
+        # featuresNorm = (features - features.min()) / (features.max() - features.min())
         print("features: ", features)
         print("P:", P)
         featuresInt = np.round(featuresNorm * P).astype(int)
@@ -146,8 +146,6 @@ def input_data(graph_type = "synthetic", n = 7, m = 2, show = False):
         print("Compute scaled features for binary encoding...")
         p = 7
         P = 2**p
-        print("features.min():", features.min())
-        print("features.max():", features.max())
         featuresNorm = (features - features.min()) / (features.max() - features.min())
         featuresInt = np.round(featuresNorm * P).astype(int)
         featuresCheck = featuresInt / P * (features.max() - features.min()) + features.min()
@@ -196,10 +194,9 @@ def input_data(graph_type = "synthetic", n = 7, m = 2, show = False):
     print(f"Swap dim (qubits): {int(np.log2(swapDim)):,}")
 
     # Sanity (potential MemoryError)
-    print(f"[Diagnostics] Rough upper bounds:")
+    print(f"[Diagnostics] Rough upper bounds (might exhaust RAM):")
     print(f"  firstHopStates entries ~ {int(nrNodes * s * 4):,}")
-    print(f"  secondHopStates entries ~ {int(np.sum(nodeDegreesC1)):,}")
-    print(f"  (Storing these as Python dicts with arrays will exhaust RAM)")
+    print(f"  secondHopStates entries ~ {int(nrNodes * s ** 2 * 4):,}")
 
     return n, nrNodes, m, maxD, s, adjacencyList, nodeDegrees, nodeDegreesC1, mC1, sC1, p, P, featuresNorm, classLabels
 
@@ -263,15 +260,6 @@ def check_feat_rotation(nodeCheck, neighborsCheck):
     print("Node:", nodeCheck)
     print("Neighbor:", neighborsCheck[0])
     print("Neighbor's FeatureNorm:", featuresNorm[neighborsCheck[0]])
-
-    # print("Neighbor:", neighborsCheck[1])
-    # print("Neighbor's FeatureNorm:", featuresNorm[neighborsCheck[1]])
-
-    # print("Neighbor:", neighborsCheck[2])
-    # print("Neighbor's FeatureNorm:", featuresNorm[neighborsCheck[2]])
-
-    # print("Neighbor:", neighborsCheck[3])
-    # print("Neighbor's FeatureNorm:", featuresNorm[neighborsCheck[3]])
     print(get_feature_rotation(nodeCheck + 1, 1))
 
 def oracleX_kronecker(feat_vec, i, q=4):
@@ -358,7 +346,7 @@ def generate_node_state(v, c, i, s, firstHopStates=None):
         finalState = np.zeros(final_len, dtype=DTYPE)
         for idx_l, vec in enumerate(state_list):
             for idx_bit, val in enumerate(vec):
-                val_h = val / np.sqrt(s)
+                val_h = val / s
                 final_idx = (idx_l * stateDim + idx_bit) * 2
                 finalState[final_idx:final_idx+2] = val_h * degRotVec
         finalState /= np.linalg.norm(finalState)
@@ -421,6 +409,7 @@ def compute_kernel_block_batched(c, i, s, firstHopStates, node_ids, nPower=1, ba
         for v in batch_i_ids:
             print(f"    Node i: {v}/{nrNodes - 1}") # Takes veryyyy long
             vec = generate_node_state(v, c, i, s, firstHopStates)
+            print("     VecNorm: ", np.linalg.norm(vec))
             if vec is None:
                 if v not in missing_nodes:
                     print(f"[DEBUG] Node {v} has no states for c={c}, i={i}")
@@ -437,6 +426,7 @@ def compute_kernel_block_batched(c, i, s, firstHopStates, node_ids, nPower=1, ba
             for v in batch_j_ids:
                 print(f"    Node j: {v}/{nrNodes - 1}")
                 vec = generate_node_state(v, c, i, s, firstHopStates)
+                print("     VecNorm: ", np.linalg.norm(vec))
                 if vec is None:
                     if v not in missing_nodes:
                         print(f"[DEBUG] Node {v} has no states for c={c}, i={i}")
@@ -596,15 +586,15 @@ else:
     print(firstHopStates)
     print("Finished.")
 
-#     print("\nGot the data (embeddings). Start classification...") # ISSUE
-#     kernelMatrix, node_ids = compute_kernel_matrix_blockwise(s, firstHopStates, nrNodes, nPower=1, n_jobs=n_jobs)
-#     np.save(KERNEL_FILE, kernelMatrix)
-#     print(f"Kernel matrix saved to {KERNEL_FILE}")
+    print("\nGot the data (embeddings). Start classification...") # ISSUE
+    kernelMatrix, node_ids = compute_kernel_matrix_blockwise(s, firstHopStates, nrNodes, nPower=1, n_jobs=n_jobs)
+    np.save(KERNEL_FILE, kernelMatrix)
+    print(f"Kernel matrix saved to {KERNEL_FILE}")
 
-# plot_kernel_matrix(kernelMatrix, show=show)
-# expectationValsAll = compute_expectation_values(kernelMatrix, classLabels, featuresNorm)
-# predictedLabels = predict_labels(expectationValsAll)
-# metrics, results = evaluate_predictions(classLabels, predictedLabels, expectationValsAll, show=show)
-# print("\nMetrics:")
-# for k, v in metrics.items():
-#     print(f"  {k}: {v:.4f}")
+plot_kernel_matrix(kernelMatrix, show=show)
+expectationValsAll = compute_expectation_values(kernelMatrix, classLabels, featuresNorm)
+predictedLabels = predict_labels(expectationValsAll)
+metrics, results = evaluate_predictions(classLabels, predictedLabels, expectationValsAll, show=show)
+print("\nMetrics:")
+for k, v in metrics.items():
+    print(f"  {k}: {v:.4f}")
