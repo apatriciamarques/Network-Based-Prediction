@@ -1,10 +1,12 @@
 #pragma once
+
 #include <boost/graph/adjacency_list.hpp>
 #include <boost/graph/adjacency_matrix.hpp>
 #include <boost/graph/graph_traits.hpp>
 #include <boost/graph/iteration_macros.hpp>
 #include <boost/graph/properties.hpp>
 #include <boost/property_map/property_map.hpp>
+#include <iostream>
 
 #define dtype float
 
@@ -17,12 +19,10 @@ struct PairHash {
   }
 };
 
-class GraphData;
-
 struct FirstHopState {
-  int v;                     // node index (1-based)
-  int i;                     // ancilla index
-  int l;                     // neighbor index (1-based)
+  int v;                    // node index (1-based)
+  int i;                    // ancilla index
+  int l;                    // neighbor index (1-based)
   std::vector<dtype> state; // 16-dimensional vector
 };
 
@@ -75,90 +75,45 @@ public:
   GraphData() {}
 
   // Get vertex by ID
-  Vertex getVertex(int id) const {
-    VertexIterator vi, vi_end;
-    for (boost::tie(vi, vi_end) = boost::vertices(graph); vi != vi_end; ++vi) {
-      if (graph[*vi].id == id) {
-        return *vi;
-      }
-    }
-    throw std::runtime_error("Vertex not found");
-  }
+  Vertex getVertex(int id) const;
 
   // Calculate degrees and second-order degrees
-  void calculateDegrees() {
-    VertexIterator vi, vi_end;
-
-    // Calculate first-order degrees
-    for (boost::tie(vi, vi_end) = boost::vertices(graph); vi != vi_end; ++vi) {
-      graph[*vi].degree = boost::degree(*vi, graph);
-    }
-
-    // Calculate second-order degrees
-    for (boost::tie(vi, vi_end) = boost::vertices(graph); vi != vi_end; ++vi) {
-      int secondOrderDegree = 0;
-      AdjacencyIterator ai, ai_end;
-      for (boost::tie(ai, ai_end) = boost::adjacent_vertices(*vi, graph);
-           ai != ai_end; ++ai) {
-        secondOrderDegree += graph[*ai].degree;
-      }
-      graph[*vi].secondOrderDegree = secondOrderDegree;
-    }
-  }
+  void calculateDegrees();
 
   // Build adjacency matrix from BGL graph
-  void buildAdjacencyMatrix() {
-    adjacencyMatrix.resize(nrNodes, std::vector<int>(nrNodes, 0));
+  void buildAdjacencyMatrix();
 
-    EdgeIterator ei, ei_end;
-    for (boost::tie(ei, ei_end) = boost::edges(graph); ei != ei_end; ++ei) {
-      Vertex source = boost::source(*ei, graph);
-      Vertex target = boost::target(*ei, graph);
-      int src_id = graph[source].id;
-      int tgt_id = graph[target].id;
+  void buildAdjacencyList();
 
-      adjacencyMatrix[src_id][tgt_id] = 1;
-      adjacencyMatrix[tgt_id][src_id] = 1;
-    }
-  }
+  void buildPaddedAdjList(int padSize);
 
-  void buildAdjacencyList() {
-    adjacencyList.assign(nrNodes, {});
-    VertexIterator vi, vi_end;
-    for (boost::tie(vi, vi_end) = boost::vertices(graph); vi != vi_end; ++vi) {
-      int v_id = graph[*vi].id;
-      AdjacencyIterator ai, ai_end;
-      for (boost::tie(ai, ai_end) = boost::adjacent_vertices(*vi, graph);
-           ai != ai_end; ++ai) {
-        adjacencyList[v_id].push_back(graph[*ai].id);
-      }
-    }
-  }
-
-  void buildPaddedAdjList(int padSize) {
-    paddedAdjList.assign(
-        nrNodes, std::vector<int>(padSize, nrNodes)); // fill with dummy nrNodes
-
-    VertexIterator vi, vi_end;
-    for (boost::tie(vi, vi_end) = boost::vertices(graph); vi != vi_end; ++vi) {
-      int v_id = graph[*vi].id;
-      AdjacencyIterator ai, ai_end;
-      int idx = 0;
-      for (boost::tie(ai, ai_end) = boost::adjacent_vertices(*vi, graph);
-           ai != ai_end && idx < padSize; ++ai, ++idx) {
-        paddedAdjList[v_id][idx] = graph[*ai].id;
-      }
-      // rest stay = nrNodes (already padded)
-    }
-  }
-
-  // ✅ Build map from firstHopStates
-  void buildFirstHopStateMap(const std::vector<FirstHopState> &firstHopStates) {
-    firstHopStateMap.clear();
-    firstHopStateMap.reserve(firstHopStates.size());
-
-    for (const auto &s : firstHopStates) {
-      firstHopStateMap[{s.v, s.i}].push_back(s.state);
-    }
-  }
+  void buildFirstHopStateMap(const std::vector<FirstHopState> &firstHopStates);
 };
+
+// Create a 2x2 matrix
+Matrix makeMatrix(dtype a, dtype b, dtype c, dtype d);
+
+// Kronecker product of two vectors
+std::vector<dtype> kron(const std::vector<dtype> &a,
+                        const std::vector<dtype> &b);
+
+Matrix hadamard(int k);
+
+Matrix Wval(dtype val);
+
+Matrix Wtheta(dtype theta);
+
+inline int get_r(const GraphData &data, int v_idx, int l_idx);
+
+const std::vector<int> &get_r_all(const GraphData &data, int v_idx);
+
+Matrix get_feature_rotation(const GraphData &data,
+                            const std::vector<dtype> &featuresNorm, int v,
+                            int l);
+
+
+std::vector<dtype>
+generate_node_state(int v, int c, int i, int s,
+                    const std::vector<FirstHopState> &firstHopStates,
+                    const GraphData &data, const std::vector<int> &nodeDegrees,
+                    const std::vector<int> &nodeDegreesC1); 
