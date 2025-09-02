@@ -12,7 +12,7 @@ The QMME protocol encodes higher-order neighborhood statistics into amplitude-en
 - End-to-end quantum pipeline: embedding + classification
 - No classical training or optimization
 - Logarithmic qubit scaling, polynomial-depth circuits
-- Tested on synthetic sparse graphs
+- Tested on synthetic sparse graphs and on real PPI networks.
 
 ## Requirements
 
