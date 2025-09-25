@@ -1,0 +1,776 @@
+\documentclass[
+  reprint,
+  superscriptaddress,
+  amsmath,amssymb,
+  aps,prl,
+]{revtex4-2}
+
+\usepackage{float}
+\usepackage{placeins}
+\usepackage{graphicx}
+\usepackage{dcolumn}
+\usepackage{multirow}
+\usepackage{bm}
+\usepackage{microtype}
+\usepackage{flushend}
+\usepackage{mathtools, amsmath, braket, amsthm, amssymb, amsfonts}
+\usepackage{cleveref}
+
+\begin{document}
+
+\preprint{APS/123-QED}
+
+\title{\textbf{Quantum Network-Based Prediction of Cancer Driver Genes}}% The title should simply and concisely convey the main findings. Avoid nonstandard abbreviations and acronyms.
+
+\author{Patrícia Marques}
+\affiliation{Instituto Superior Técnico, University of Lisbon, Lisboa, Portugal}
+
+\author{Andreas Wichert}
+\affiliation{Instituto Superior Técnico, University of Lisbon, Lisboa, Portugal}
+\affiliation{GAIPS, INESC-ID, Porto Salvo, Portugal}
+
+\author{Bruno Coutinho}
+\affiliation{Instituto de Telecomunicações, Lisboa, Portugal}
+\affiliation{German Aerospace Center (DLR), Cologne, Germany}
+
+\date{\today}
+
+\begin{abstract} % Let this be a "pedagogical article", very detailed.
+
+Identification of cancer driver genes is fundamental for the development of targeted therapeutic interventions. The integration of mutational profiles with protein-protein interaction (PPI) networks offers a promising avenue for their detection~\cite{horn2018netsig, nourbakhsh2024prediction},
+% However, the application of quantum computing methodologies in this domain remains largely unexplored.
+but scaling to large networks is computationally demanding. Quantum computing offers compact representations and potential complexity reductions, and while it has been applied to other network-based biological inference tasks, including link prediction, it has not yet been used for driver gene prediction.
+% In this study,
+We present a supervised quantum framework %for cancer driver gene prediction
+that combines mutation scores with network topology via a novel state preparation scheme, \textit{Quantum Multi-order Moment Embedding} (QMME), motivated by the classical method of Gumpinger et al.~\cite{gumpinger2020prediction}. QMME encodes low-order statistical moments over the mutation scores of a node’s immediate and second-order neighbors, and encodes this information into quantum states. These are used as inputs to a kernel-based quantum binary classifier that discriminates known driver genes from others. 
+Simulations on a real PPI network demonstrate competitive performance relative to classical baselines. A brief complexity analysis suggests the approach could achieve a quantum speedup in network-based cancer gene prediction. 
+%we identify the potential of our approach in uncovering a quantum speedup for quantum network-based prediction of cancer driver genes.
+This work underscores the potential of supervised quantum graph learning frameworks to advance biological discovery. % indicates the applicability
+
+%https://pmc.ncbi.nlm.nih.gov/articles/PMC5985961/pdf/nihms918089.pdf (inspo. In particular, Intro is ver well done.)
+
+% [An article usually includes an abstract, a concise summary of the work covered at length in the main body of the article.] 
+\end{abstract}
+
+\keywords{Binary Classification | Quantum Algorithms | Complex Networks |  Protein-Protein Interaction Networks}%Use showkeys class option if keyword
+                              %display desired
+\maketitle
+
+%\tableofcontents
+
+\section{I. Introduction}
+%
+% Follow this lovely structure https://arxiv.org/pdf/1909.12264.
+%
+\noindent A central objective in oncology is to identify and catalogue genes underlying human cancer~\cite{garraway2013lessons, vogelstein2013cancer, frampton2013development}. While genes with high mutation rates are likely drivers, most \textit{cancer driver genes} have few mutations. In these cases, frequency-based methods alone cannot reliably distinguish rare cancer driver genes from irrelevant ones~\cite{vogelstein2013cancer}.
+% no paragraph 
+One explanation lies in the networked nature of cellular processes: genes operate within pathways and complexes, so cancer may result from disruption at the pathway level rather than mutations in specific individual genes. Recent research has embraced this interaction-based perspective of cancer, integrating biological networks with statistical measures of gene-cancer associations to identify novel candidate cancer driver genes~\cite{horn2018netsig, reyna2018hierarchical, kovacs2019network, cheng2019network}.
+In these networks, nodes correspond to genes and edges represent relationships between them. Protein-protein interaction (PPI) networks~\cite{lage2007human, li2017scored, szklarczyk2019string} are a widely used representation of gene interactions, as they integrate information from diverse data sources, tissues, and molecular processes.
+
+Previous studies have combined PPI networks with gene-level cancer association scores, using clustering or network propagation methods.
+%
+A common choice for these gene scores is the MutSig \(P\)-value~\cite{lohr2012discovery, lawrence2014discovery}, which estimates the significance of observed mutations by considering (i) the overall mutational burden, (ii) clustering of mutations within a gene’s coding sequence, and (iii) the functional impact of mutations.
+%, including their enrichment in evolutionarily conserved sites, to distinguish cancer-related changes from background variation
+% the median expression level of each gene in cancer.
+NetSig, for instance, focuses on the local neighborhood of each gene to identify cancer driver genes while correcting for node degree bias~\cite{horn2018netsig}.
+%%%%%%%%%%%%%%%%%%%%%%
+A few studies have explored supervised approaches, incorporating existing knowledge of known driver genes during prediction. Gumpinger et al. used Cancer Gene Census (CGC) annotations to train classifiers for discovering new cancer driver genes~\cite{gumpinger2020prediction}. This method models the task as a node-level supervised classification problem in a molecular interaction network, combining network topology with mutation-score features. It achieved more than a \(10\%\) improvement in area under the precision–recall curve (AUPRC) over baseline methods.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% BRIDGE %%%%%%%%%%%%%%%%%%%%%%%
+Network-based approaches derive their strength from integrating weak mutation signals across interconnected genes rather than relying on strong evidence from individual genes. This demonstrates the value of graph-structured representations as a paradigm for cancer driver gene discovery.
+%
+However, as biological networks continue to grow in size and complexity, classical methods face increasing challenges in scalability and representational efficiency. This motivates the exploration of quantum computing as an alternative framework for representing and processing such structured data, including PPI networks.
+% 
+In particular, quantum machine learning (QML), has been proposed as a tool with potential for inference tasks~\cite{wittek2014quantum, schuld2015introduction, biamonte2017quantum, park2020theory}.
+%
+Recent work has begun applying quantum computing to biological network inference problems, including link prediction tasks~\cite{moutinho2023quantum, magano2023quantum, moutinho2024complexity}, demonstrating potential speedups over
+classical baselines, further supporting the potential of quantum approaches in this domain. % dge-level tasks such as link prediction
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% QML %%%%%%%%%%%%%%%%%%%%%%%%%%
+Classical methods often rely on local statistical descriptors, such as neighborhood means or low-order moments, to capture structural information in graphs~\cite{gumpinger2020prediction, bi2023mm}. However, quantum embedding strategies that incorporate such statistics remain unexplored. Moreover, many existing QML approaches neglect the gate complexity of state preparation, limiting their practicality as end-to-end quantum solutions~\cite{zhao2024learning, wang2024comprehensive}. Motivated by these gaps, we introduce a quantum protocol that embeds low-order statistical moments of features in the one-hop and two-hop neighborhoods into amplitude-encoded quantum states.
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% QMME WORK %%%%%%%%%%%%%%%%%%%%%%%%%%
+In this work, we introduce the \textit{Quantum Multi-order Moment Embedding} (QMME) protocol, which encodes local graph statistics into quantum states for inference. We apply this feature map to a PPI network, where nodes represent genes and features correspond to MutSig \(P\)-values. Thus, we design an almost fully quantum pipeline for node-level binary classification of genes as cancer drivers.
+%
+Classification is performed using the swap-test classifier~\cite{blank2020quantum}, a non-parametric, distance-based method that employs a quantum kernel based on state similarity.
+%
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% RESULTS %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+The entire process, from embeddings to inference, is carried out within the quantum domain, requiring no classical optimization.
+%
+It relies only on minimal data access assumptions, enabling straightforward circuit design, and involves only limited classical post-processing, inherent to the swap-test classifier.
+%
+The pipeline explicitly addresses state preparation with practical circuit construction, ensuring embeddings can be constructed with logarithmic qubit resources and constant-depth circuits.
+%
+We validate our approach through numerical simulations on real graphs, evaluating classification performance alongside quantum resource metrics such as circuit depth and query complexity. This work establishes a proof-of-principle for end-to-end quantum learning on graph-structured biological data and lays groundwork for future quantum models in complex network inference tasks.
+%
+%
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.82\columnwidth]{imgs/intro-pic.png}
+   \caption{\textbf{Cancer driver genes prediction.}
+    %
+    \textbf{(a)} PPI network where genes are colored by class. 
+    %
+    \textbf{(b)} Novel quantum approach: QMME encodes network-based features into quantum states and applies the swap-test classifier. 
+    %
+    \textbf{(c)} Existing classical approaches rely on tabular features with standard classifiers.}
+\end{figure}
+%
+%
+%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%
+%
+%
+\section{II. Problem Setup}
+%
+%A PPI network can be represented as a graph, where nodes are genes and edges indicate interactions between genes.
+\subsection{A. Notation}
+%
+\noindent
+Protein-protein interaction (PPI) networks model interactions between genes as nodes connected by edges as in~\cref{fig:gene-net}. Each gene’s association with cancer can be quantified using the MutSig \(P\)-value~\cite{lohr2012discovery, lawrence2014discovery}, which reflects the statistical significance of mutations considering mutational burden, clustering, and functional impact~\cite{gumpinger2020prediction}.
+%
+%
+%
+Formally, we represent a PPI network as an unweighted, undirected graph \(\mathcal{G} = (V, E, \boldsymbol{x})\) with \(|V| = N\) nodes, where \(V = [N]\) denotes the set of node indices and \(E \subseteq V \times V\) is the edge set. The connectivity of \(\mathcal{G}\) is described by its adjacency matrix \(A \in \{0,1\}^{N \times N}\), where \(A_{vu} = 1\) indicates the presence of an edge between nodes \(v\) and \(u\), and \(A_{vu} = 0\) its absence. Define the immediate neighborhood of \(v\) as
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\begin{equation}
+\mathcal{N}^1_v = \{ u \in V \mid A_{vu} = 1 \}.
+\end{equation}
+%
+We assume \(\mathcal{N}^1_v\) is ordered by increasing node index. This allows us to define the function \(r(v, \ell)\) as
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\begin{equation}
+r(v, \ell) := \mathcal{N}^1_v(\ell),
+\quad \ell \in \{0, \ldots, |\mathcal{N}^1_v| - 1\},
+\end{equation}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\noindent which returns the index of the \(\ell\)-th neighbor of \(v\) in \(\mathcal{N}^1_v\). Equivalently, \(r(v, \ell)\) is the column index of the \(\ell\)-th nonzero entry in row \(v\) of \(A\). If \(\ell \geq |\mathcal{N}^1_v|\), i.e., the function returns a flag value indicating no such neighbor exists.
+% no paragraph (12.8)
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+The two-hop neighborhood \(\mathcal{N}^2_v \subseteq V\) is defined as
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\begin{equation}
+\mathcal{N}^2_v = \{ w \in V \mid \exists u \in V,\, A_{vu} = 1 \wedge A_{uw} = 1 \}.
+\end{equation}
+% no paragraph (12.8)
+Each node \(v \in V\) has a scalar feature value \(x_v \in \mathbb{R}\), representing its MutSig \(P\)-value quantifying the gene’s mutation significance. The collection of all node features is denoted by the vector
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\begin{equation}
+\boldsymbol{x} = (x_1, x_2, \ldots, x_N) \in \mathbb{R}^N.
+\label{eq:initial-features}
+\end{equation}
+
+%
+%
+%
+\subsection{B. Node Embeddings}
+%
+%
+%
+\noindent The low-order origin (or raw) moments of a scalar random variable \( X \sim \mathcal{P} \) are defined as \(\mathbb{E}[X^i]\), where \(i\) denotes the order of the moment~\cite{shao1999mathematical}. These moments are uncentered (i.e., calculated about the origin) and capture fundamental properties of the distribution. The first four are the mean \(\mathbb{E}[X]\), the uncentered quadratic \(\mathbb{E}[X^2]\), cubic \(\mathbb{E}[X^3]\), and quartic \(\mathbb{E}[X^4]\) moments. Low-order origin moments serve as the building blocks for the more familiar summary statistics of variance, skewness, and kurtosis, which are centered or standardized variants derived from them.
+%
+Formally, we define the \emph{origin moment embedding} as the mapping
+\begin{equation}
+\overline{\varphi}(X) = \bigl[ \mathbb{E}[X], \;\; \mathbb{E}[X^2], \;\; \mathbb{E}[X^3], \;\; \mathbb{E}[X^4] \bigr],
+\end{equation}
+which collects the first four origin moments of \(X\).
+% no paragraph
+Since the true distribution \(\mathcal{P}\) is generally unknown, these moments are typically estimated empirically. For a finite sample \(\boldsymbol s = [s_1, \ldots, s_k]\) of \(X\), with \(s_j \in \mathbb R\), the corresponding \emph{sample raw moment embedding} is given by
+\begin{equation}
+\varphi(\boldsymbol s) = \left[
+\sum_{j=1}^k \frac{s_j}{k}, \quad
+\sum_{j=1}^k \frac{s_j^2}{k}, \quad
+\sum_{j=1}^k \frac{s_j^3}{k}, \quad
+\sum_{j=1}^k \frac{s_j^4}{k}
+\right].
+\label{eq:sample-raw-moment-embedding}
+\end{equation}
+which returns the first four sample origin moments from the sample, thus, describing its distributional shape.
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%
+The hop order \(c \in \{1,2\}\) specifies the neighborhood distance from node \(v\). Given \(\boldsymbol{x}\) defined in \cref{eq:initial-features},
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\begin{equation}
+\mathcal{X}^c_v = \{ x_u \in \boldsymbol{x} \mid u \in \mathcal{N}^c_v \},
+\end{equation}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\noindent denotes the set of feature values of nodes at hop-distance \(c\) from \(v\), which are samples from a local distribution \(\mathcal P_v^c\).
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\noindent The function \(\varphi(\cdot)\) is applied to each \(\mathcal{X}^c_v\), such that
+\begin{equation}
+\boldsymbol m^c_v := \varphi(\mathcal{X}^c_v) \in \mathbb{R}^4.
+\end{equation}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\noindent For vertex \(v \in V\), the node embedding is then the concatenation of \(\boldsymbol m^c_v\) from immediate and two-hop neighborhoods:
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\begin{equation}
+\boldsymbol m_v = \bigl[ \boldsymbol m^1_v, \boldsymbol m^2_v \bigr] \in \mathbb{R}^8,
+\label{eq:origin-moment-embedding-function}
+\end{equation}
+defining the \textit{node embedding function} \(\boldsymbol m_v: V \to \mathbb{R}^8\).
+
+\subsection{C. Problem Statement}
+%
+%
+%
+\noindent We consider a supervised binary classification task on a graph \(\mathcal{G} = (V, E, \boldsymbol{x})\), where a subset of nodes \(V_l \subseteq V\) is labeled. For these nodes, \(y_v = 1\) for \(v \in V_1 \subset V_l\) and \(y_v = 0\) for \(v \in V_0 \subset V_l\), corresponding to the positive and negative classes, respectively. This is a node-level classification task, i.e., the aim is to predict labels for individual nodes. Our goal is to predict the label \(\hat y_v\) for any node \(v \in V\), using a method that combines a \textit{quantum node embedding} unitary operator \(U_\mathcal{G}\), derived from the node features \(\boldsymbol{x}\) and the connectivity \(E\) of \(\mathcal{G}\), with a quantum binary classifier \(\mathcal{C}\). This combination is used to predict whether a node \(v\) belongs to the positive or negative class. That is,
+\begin{equation}
+    \mathcal{C}\left(U_\mathcal{G}\ket{v} \ket{0}^{\otimes{\mathfrak m}} \right) = \hat{y}_v,
+    \label{eq:goal}
+\end{equation}
+\noindent where \(\hat{y}_v\in\{0,1\}\) denotes the predicted class label for node \(v\), and \(\mathfrak m\) is the number of data qubits.
+
+The objective is to explicitly define \(U_\mathcal G\) as the state preparation step and design the full quantum circuit for the supervised classification of cancer driver genes. The input is a PPI network where the node features \(\boldsymbol{x}\) are per-gene MutSig \(P\)-values. For the labeled data, a set of positively labeled genes \(V_1\) is obtained from CGC data, so the positive class corresponds to cancer driver genes.
+
+%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%
+\FloatBarrier
+\section{III. Quantum Multi-Order Moment Embedding (QMME)}
+\label{sec:big-QMME}
+%
+%
+%
+\subsection{A. Input Model}
+\label{sec:input-model}
+%
+%
+%
+\noindent We base our algorithm on having query access to the graph \(\mathcal G=(V,E,\boldsymbol x)\) through the adjacency list model for bounded-degree graphs~\cite{goldreich1997property,goldreich2017introduction, ben2024symmetries}. In this input model, the graph has \(N\) vertices and bounded degree \(s=2^{\mathfrak s}\), i.e., at most \(s\) nonzero entries in each row of the adjacency matrix~\cite{lin2022lecture, camps2024explicit}. To accommodate an attributed network, we extend this model by adding a feature query. Thus, the three available query operations are the following:
+\begin{enumerate}
+    \item \textbf{neighbor query:} given \(v \in V\) and \(\ell \in \mathbb Z\), returns the \(\ell\)-th neighbour of \(v\) if \(\ell \leq k_v\), and \(*\) otherwise,
+    \item \textbf{feature query:} given \(v \in V\), returns the value \(x_v\),
+    \item \textbf{degree query:} given \(v \in V\), returns the degree \(k_v\).
+\end{enumerate}
+\noindent A quantum equivalent of this input model can be described by defining three corresponding unitary operators \(O_L\), \(\tilde O_X\), and \(\tilde O_K\), acting on appropriate Hilbert spaces. Here, \(O_L\) provides access to a node's immediate neighborhood, \(\tilde O_X\) encodes node features, and \(\tilde O_K\) allows access to the number of \(c\)-hop neighbors. The so-called \textit{oracles} act as:
+\begin{align}
+    O_L &:\ket{v} \ket{\ell} \mapsto \ket{v}\ket{r(v,\ell)}, \\
+    \tilde O_X &: \ket{v}\ket{0^{d'}} \mapsto \ket{v}\ket{\tilde x_v}, \\
+    \tilde O_K &: \ket{v, c}\ket{0^{d'}} \mapsto \ket{v, c} \ket{\tilde k_v^c},
+    \label{eq:input-model-oracles}
+\end{align}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\noindent where \(v\) is the node index, \(\ell\) the neighbor index, \(\tilde x_v\) the \(d'\)-bit fixed point representation of the node feature value \(x_v \in \boldsymbol x\), and \(\tilde k_v^c\) the binary representation of the node degree \(k_v^c=|\mathcal{N}^c_v|\), i.e., the number of \(c\)-hop neighbors. 
+
+Although oracle implementation on quantum hardware remains an active topic of research~\cite{kuklinski2024s}, our work assumes coherent access, allowing queries to be made in superposition, which is a standard assumption in the theoretical framework of quantum algorithms. We also assume access to the controlled versions of the oracles \(O_L\), \(\tilde O_X\), and  \(\tilde O_K\) and their inverses. Since these oracles are unitary and represented by real-valued matrices, their inverses reduce to their transposes.  
+% no paragraph
+Neighbor and feature queries, whether classical or quantum, are counted as \(\mathcal{O}(1)\) in query complexity. The degree query can be emulated by \(\mathcal O (\log s)\) neighbor queries via binary search~\cite{goldreich2017introduction}. We introduce \(\tilde O_K\) as a generalization of the degree query, enabling access to the size of a \(c\)-hop neighborhood, with \(c \in \{1,2\}\). Thus, \(\tilde O_K\) can be constructed from \(O_L\) with \(\mathcal{O}\left(\log^2 s\right)\) queries.
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\subsection{B. Rotation Operators}
+\label{sec:rotation-operators}
+%
+%
+%
+\noindent The goal of the embedding circuit is to encode local graph statistics into the amplitudes of quantum states. This is done using controlled single-qubit rotations, where the rotation angles are determined by values encoded in the computational basis and retrieved from the oracles. To this end, we define two rotation operators, \(F_X\) and \(F_{K^{-1}}\).
+%
+Given a node feature \(x_v \in \mathbb{R}\) with \(|x_v| \leq 1\), and its binary encoding \(\tilde{x}_v\), the \textit{feature rotation operator} \(F_X\)~\cite{lin2022lecture} is defined as
+\begin{align}
+    F_X &: \ket{0} \ket{\tilde{x}_v} \mapsto \left(x_v \ket{0} + \sqrt{1 - |x_v|^2} \ket{1}\right) \ket{\tilde{x}_v},
+\end{align}
+which corresponds to a single-qubit rotation \(R_y(\theta)\) with angle \(\theta = 2 \arcsin(x_v)\). This encodes the scalar value \(x_v\) into the amplitude of the \(\ket{0}\) component. Similarly, we define the \textit{degree-inverse rotation operator} \(F_{K^{-1}}\)~\cite{tong2021fast} as
+\begin{align}
+    F_{K^{-1}} &: \ket{0} \ket{\tilde{k}_v^c} \mapsto \left(\frac{1}{k_v^c} \ket{0} + \sqrt{1 - \left|\frac{1}{k_v^c}\right|^2} \ket{1}\right) \ket{\tilde{k}_v^c}.
+\end{align}
+% no paragraph
+These operators are implemented using multi-controlled \(R_y\) rotation gates~\cite{lin2022lecture}, where the control register holds the binary input \(\tilde{x}_v\) or \(\tilde{k}_v^c\). The rotation angles are \(\theta(\tilde{x}_v) = 2 \arcsin(x_v)\) and \(\theta(\tilde{k}_v^c) = 2 \arcsin(1 / k_v^c)\), respectively.
+%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%
+\subsection{C. Feature and Degree-Inverse Oracles}
+%
+%
+\noindent To amplitude-encode the node embedding \(\boldsymbol m_v\) into quantum states, we introduce two derived oracles \(O_X\) and \(O_K^{-1}\), which use the basis-encoding input oracles \(\tilde O_X\) and \(\tilde O_{K^{-1}}\), along with rotation operators \(F_X\) and \(F_K^{-1}\).
+% no paragraph
+The \textit{feature oracle} \(O_X\) encodes powers of the feature value \(x_v\) conditioned on the control register \(\ket{i}\). Specifically, the amplitude of the component where the ancilla register is in state \(\ket{0}^{\otimes 4}\) is mapped to \(x_v^i\), which relates to the \(i\)-th order term in the raw moment embedding function \(\varphi(\cdot)\) from \cref{eq:sample-raw-moment-embedding}.
+% Although this amplitude is not the final embedding itself, it forms a building block used to reconstruct the moments in the QMME algorithm.
+%
+The oracle \(O_X\) acts on a control register, where the integer \(i\) in the control register \(\ket i\) dictates how many of the ancilla qubits are rotated by \(F_X\), as follows:
+%
+\noindent 
+\begin{align}
+\ket{v,i} &\ket{0}^{\otimes (4+d')} 
+\xrightarrow{\tilde{O}_X} 
+\ket{v,i} \ket{0} \ket{\tilde{x}_v} \nonumber \\
+&\xrightarrow{C\text{-}F_X} 
+\ket{v,i}\!\left(x_v\ket{0}\!+\!\sqrt{1\!-\!|x_v|^2}\ket{1}\right)^{\!\otimes i}\!\ket{0}^{\!\otimes (4 - i)}\ket{\tilde{x}_v} \nonumber\\
+&\xrightarrow{\tilde{O}_X^{T}} 
+\ket{v,i} \left( x_v \ket{0} + \sqrt{1 - |x_v|^2} \ket{1}\right)^{\otimes i} \ket{0}^{\otimes (4 - i + d')}.
+\end{align}
+Omitting the intermediate register \(\ket{\tilde{x}_v}\), \cref{fig:O_X} summarizes the circuit of oracle \(O_X\), which can be expressed as
+\begin{align}
+O_{X}\! :\!\ket{v,i}\!\ket{0}^{\otimes 4} \!\mapsto \!\ket{v,i}\!\left(x_v\ket{0}\!+\!\sqrt{1\!-\!|x_v|^2}\ket{1}\right)^{\!\otimes i}\!\ket{0}^{\!\otimes (4 - i)}.
+\end{align}
+% no paragraph
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+The degree-inverse oracle \(O_{K^{-1}}\) amplitude-encodes the inverse degree scaling factors \(1/k_v^c\), required to emulate the average present in the moment embedding function \(\varphi(\cdot)\), included in the node embedding \(\boldsymbol m_v\). It performs a controlled rotation that encodes the value \(1/k_v^c\) as the amplitude of the \(\ket{0}\) state of an ancilla qubit, as follows:
+\begin{equation}
+\begin{aligned}
+\ket{v,c} &\ket{0}^{\otimes (1+d')}
+\xrightarrow{\tilde O_K} 
+\ket{v,c} \ket{0} \ket{\tilde{k}_v} \\
+&\xrightarrow{F_{K^{-1}}} 
+\ket{v,c} \left( \frac{1}{k_v^c} \ket{0} + \sqrt{1 - \left| \frac{1}{k_v^c} \right|^2} \ket{1} \right) \ket{\tilde{k}_v} \\
+&\xrightarrow{\tilde O_K^{T}} 
+\ket{v,c} \left( \frac{1}{k_v^c} \ket{0} + \sqrt{1 - \left| \frac{1}{k_v^c} \right|^2} \ket{1} \right) \ket{0}^{\otimes{d'}}.
+\end{aligned}
+\end{equation}
+%
+\noindent As shown in \cref{fig:qmme-schematics}, the intermediate register \(\ket{\tilde{k}_v}\) is omitted, and the oracle is represented as:
+\begin{align}
+O_{K^{-1}} : \ket{v,c} \ket{0} \mapsto \ket{v,c}\left( \frac{1}{k_v^c} \ket{0} + \sqrt{1 - \left| \frac{1}{k_v^c} \right|^2} \ket{1} \right).
+\end{align}
+%
+%
+%
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\columnwidth]{imgs/O_X.png}
+    \caption{\textbf{Circuit of the feature oracle \(O_X\), built from controlled rotations \(F_X\).}
+    %
+    \textbf{(a)} Gate representation of \(O_X\).  
+    %
+    \textbf{(b)} Detailed view: a two-qubit control register \(\ket{i}\) determines how many of the four ancilla qubits undergo \(F_X\) rotations (00 → first qubit, 01 → first two, 10 → first three, 11 → all four). A \(d'\)-qubit register is used internally but omitted for clarity.}
+    \label{fig:O_X}
+\end{figure}
+%
+%
+\noindent Together with the neighbor oracle \(O_L\) and Hadamard gates, the oracles \(O_X\) and \(O_{K^{-1}}\) form the core building blocks of the QMME circuit, as depicted in \Cref{fig:qmme-schematics}.
+%
+\begin{figure*}[t]
+\includegraphics[width=\textwidth]{imgs/Net-Embed-UG.png}
+\caption{\label{fig:qmme-schematics} \textbf{Quantum Multi-order Moment Embedding (QMME) protocol.}  
+%
+\textbf{(a)} Gate view of the unitary operator \(U_\mathcal{G}\), which maps \(\ket{v} \ket{0}^{\otimes \mathfrak{m}} \mapsto \ket{v} \ket{\boldsymbol{\psi}_v}\), amplitude-encoding low-order statistical moments of node \(v\)'s neighborhood. Here, \(\ket{v}\) encodes the node index \(v \in V\), and the \(\mathfrak{m}\)-qubit data register is initialized to zero.  
+%
+\textbf{(b)} Input PPI network \(\mathcal{G} = (V, E, \boldsymbol{x})\) with node features \(\boldsymbol{x}\) representing mutation scores. Immediate neighbors of \(v\) are shown in purple, second-hop neighbors in orange. These provide the data for the embedding \(\ket{\boldsymbol{\psi}_v} \in \mathbb{R}^{2^{\mathfrak{m}}}\).  
+%
+\textbf{(c)} The node embedding function \(\boldsymbol m_v\), based on the moments \(\varphi(\cdot)\) over \(v\)'s neighborhood, is encoded as the quantum state \(\ket{\boldsymbol{\psi}_v}\).  
+%
+\textbf{(d)} Circuit-level implementation of the gate \(U_\mathcal{G}\). The \(\mathfrak{m}\)-qubit register is composed of subregisters for immediate and second-hop (\(\ell_1\),\(\ell_2\)) neighbors, a control qubit \(c\), a two-qubit register \(i\) indexing the \(i\)-th moment, and a five-qubit ancilla register \(a\). The circuit accesses the PPI network in (b) via the quantum oracles in \cref{eq:input-model-oracles}.}
+%
+\end{figure*}
+%
+%
+%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\subsection{D. QMME Algorithm}
+%
+%
+%
+\noindent We define the QMME unitary operator \(U_{\mathcal{G}}\) as
+\begin{equation}
+U_\mathcal{G} : \ket{v} \ket{0}^{\otimes \mathfrak{m}} \mapsto \ket{v} \ket{\boldsymbol{\psi}_v},
+\label{eq:qmme-unitary}
+\end{equation}
+and refer to this mapping as the \textit{quantum node embedding}. The second register, consisting of \(\mathfrak{m}\) qubits, is called the \textit{data register}. The total number of qubits is \(\mathfrak{m} = 2\log N + 8\) (excluding work registers), and generally scales as \(\mathcal{O}(\log N)\). 
+%
+\noindent A schematic of the operator \(U_\mathcal{G}\) circuit is shown in~\Cref{fig:qmme-schematics}, and step-by-step derivation of the quantum node embedding in~\cref{eq:qmme-unitary} is presented in the Appendix.
+% no paragraph
+The resulting state \(\ket{\boldsymbol{\psi}_v}\) consists of two components:
+\begin{equation}
+\ket{\boldsymbol{\psi}_v} = \ket{\boldsymbol{\psi}_m} + \ket{\boldsymbol{\psi}_\perp},
+\end{equation}
+where \(\ket{\boldsymbol{\psi}_m}\) is the \textit{neighborhood-moment component}, capturing the quantum analogue of the classical embedding \(\boldsymbol{m}_v \in \mathbb{R}^8\), and \(\ket{\boldsymbol{\psi}_\perp}\) is an orthogonal component.
+
+According to the circuit in~\Cref{fig:qmme-schematics}, \(\ket{\boldsymbol{\psi}_m}\) is defined as
+\begin{align}
+\ket{\boldsymbol{\psi}_m} 
+&= \ket{\boldsymbol{c} \odot \boldsymbol{m}_v} \ket{0}^{\otimes (\mathfrak{m} - 3)} \label{eq:psi_m}\\ 
+&= \sum_{c \in [2]} \frac{1}{2^{3/2} \, s^c} \sum_{i \in [4]} \varphi_i(\mathcal{X}_v^c) \ket{c, i} \ket{0}^{\otimes (\mathfrak{m} - 3)} \label{eq:psi_m_detail}
+\\
+&= \sum_{j\in [8]} c_j \cdot m_{v,j} \ket{j} \ket{0}^{\otimes (\mathfrak{m} - 3)},
+\end{align}
+where \(\odot\) denotes the element-wise (Hadamard) product, \(\varphi_i(\mathcal{X}_v^c)\) are the \(i\)th-order moment of the neighborhood \(\mathcal{X}_v^c\), and the constant vector \(\boldsymbol{c} \in \mathbb{R}^8\) is
+\begin{equation}
+\boldsymbol{c} = \frac{1}{2^{3/2}} \left[\frac{1}{s}, \, \frac{1}{s}, \, \frac{1}{s}, \, \frac{1}{s}, \, \frac{1}{s^2}, \, \frac{1}{s^2}, \, \frac{1}{s^2}, \, \frac{1}{s^2} \right].
+\label{eq:c-constant-vector}
+\end{equation}
+%
+\noindent The orthogonal component \(\ket{\boldsymbol{\psi}_\perp}\) of the resulting state is
+\begin{equation}
+\ket{\boldsymbol{\psi}_\perp} = \sum_{a \neq 0} \ket{\boldsymbol{\psi}_{\perp,a}} \ket{a},
+\end{equation}
+where \(\ket{a}\) denotes computational basis states in the \((\mathfrak m-3)\) data qubits, and \(\ket{\boldsymbol{\psi}_{\perp,a}} \in \mathbb{R}^{2^{(\mathfrak{m}-3)}}\).
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+As an example, take the mean of the mutation scores of the immediate neighbors of gene \(v\), i.e., \(m_{v,1} = \varphi_1(\mathcal{X}_v^1)\). As in~\cref{eq:psi_m_detail}, the amplitude of the state \(\ket{0_c, 0_i, 0^{ (\mathfrak{m} - 3)}}\) will be \(\frac{\varphi_1(\mathcal{X}_v^1)}{2^{3/2} s}\). As shown in~\cref{fig:qmme-schematics}, this arises by:
+\begin{enumerate}
+    \item preparing an equal superposition over register \(\ell_1\);
+    \item \(O_L\) retrieves the immediate neighbors' indices;
+    \item operator \(O_X\) encodes the neighbors' feature values into the \(\ket{0}\) component of the first ancilla qubit;
+    \item uncomputing the basis register \(\ell_1\) via \(O_L^T\) leaves the \(\ket{0}^{\otimes n}\) component amplitude proportional to the sum of neighbors' features, while others form interference patterns with alternating signs;
+    \item finally, the ancilla rotation \(O_{K^{-1}}\) normalizes by the degree \(k_v^c\), resulting in the mean of \(\mathcal X_v^c\) encoded in the amplitude of the rotated ancillas at zero.
+\end{enumerate}
+\noindent 
+This procedure describes the action of the unitary \(U_\mathcal G\) for \(c,i=0\). It generalizes to \(c \!\in\! [2], i\!\in\![4]\), covering immediate and second neighbors, and more moments, yielding
+\begin{align}
+\bra{v,c,i}\bra{0}^{\otimes (\mathfrak{m}-3)} U_{\mathcal{G}} \ket{v} \ket{0}^{\otimes \mathfrak{m}} = \frac{1}{2^{3/2} s^{c}} \sum_{x_u \in \mathcal X_v^c}\frac{x_u^i}{k_v^c}=\frac{\varphi_i(\mathcal{X}_v^c)}{2^{3/2} s^c}.
+\end{align}
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+% \noindent Here, \(U_{\mathcal{G}}\) denotes the QMME operator, \(k_v^c\) is the cardinality of the \(c\)-hop neighborhood of node \(v\), and \(s\) represents the sparsity of the adjacency matrix. The scalar \(x_j\) corresponds to the feature value indexed by \(j\), while the function \(r(v,\ell)\) returns the \(\ell\)-th neighbor of node \(v\). The Kronecker delta \(\delta_{r(v,\ell), r(v,\ell')}\) equals 1 if the two neighbors coincide, and 0 otherwise.
+
+%To characterize the state structure more explicitly, consider the computational basis \(\{|i\rangle\}_{i=0}^7\) of the main register. Satisfies
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%\begin{equation}
+%    \langle 0^{ (\mathfrak m - 3)} |\perp \rangle = 0 \quad,
+%\end{equation}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%\noindent which guarantees a clean separation between the \emph{moment} component (associated with the ancilla zero state) and the \emph{orthogonal} component (supported on the orthogonal subspace).
+
+%
+%
+%
+\begin{figure*}
+    \includegraphics[width=\textwidth]{imgs/QMME+Swap-Test.png}    
+    \caption{\label{fig:qmme+swap-test}
+    \textbf{Full cancer gene prediction pipeline with the QMME protocol as part of state preparation.} 
+    The first register corresponds to the ancilla qubit \(a\), the second to the test data qubits \(d_t\), the third to the index qubits of the test node \(v_t\), the fourth stores the label qubit \(y\), the fifth the labeled data qubits \(d_l\), and the sixth the index qubits of the labeled nodes \(v_l\). The operator \(U_\mathcal G\), together with the Hadamard gate and the oracle \(O_Y\), prepares the quantum state, which is then processed by the classifier $\mathcal{C}$, i.e., the swap-test classifier. Node labels \(\hat{y}_v \in \{0,1\}\) are predicted via a swap-test and two-qubit measurement statistics on the ancilla and label registers. An outcome of label one indicates that the test gene is predicted as a cancer driver.} 
+\end{figure*}
+%
+%
+%
+\section{IV. Quantum Classification Framework}
+%
+%
+\noindent
+The quantum node embedding operator \(U_{\mathcal{G}}\) maps each node in a feature-labeled network to its statistical moments, amplitude-encoded within a quantum state \(\ket{\boldsymbol \psi_v}\). Given a protein-protein interaction (PPI) network as input, the QMME protocol encodes local statistical moments of the MutSig \(P\)-values. Depicted in~\Cref{fig:qmme+swap-test}, the quantum classification framework assumes query access to the class labels \(y_{v_l}\in\{0,1\}\) for each labeled node \(v_l\in V_l\):
+\begin{enumerate}
+    \item \textbf{label query:} given \(v_l \in V_l\), returns the label \(y_{v_l}\),
+\end{enumerate}
+\noindent with a quantum equivalent defined by the operator \(O_Y\):
+\begin{align}
+    O_Y &:\ket{v_l} \ket{0} \mapsto \ket{v_l}\ket{y_{v_l}},
+    \label{eq:label-oracle}
+\end{align}
+\noindent encoding the class label \(y_{v_l}\in\{0,1\}\) in a single qubit. 
+%
+The proposed quantum classification framework proceeds as follows: after preparing the equal superposition over labeled nodes, the embedding unitary \(U_\mathcal G\) is applied both to this register \(v_l\) and to the test node register \(v_t\). The class labels are loaded onto the label qubit via \(O_Y\). Classification follows via the swap-test classifier~\cite{blank2020quantum}, where the measurement statistics determine the final class prediction of the test node. 
+The full pipeline may be described as a sequence of quantum state evolutions:
+\begin{equation}
+\begin{aligned}
+    &\ket{0} \ket{0}^{\otimes \mathfrak{m}} \ket{v_t} \ket{0} \ket{0}^{\otimes \mathfrak{m}} \ket{0}^{\otimes n} \\
+    &\xrightarrow{H^{\otimes n}_{v_l}} 
+    \frac{1}{\sqrt{|V_l|}} \sum_{v_l \in V_l} \ket{0} \ket{0}^{\otimes \mathfrak{m}} \ket{v_t} \ket{0} \ket{0}^{\otimes \mathfrak{m}} \ket{v_l} \\
+    &\xrightarrow{U_\mathcal{G}}
+    \frac{1}{\sqrt{|V_l|}} \sum_{v_l \in V_l} \ket{0} \ket{\boldsymbol{\psi}_t} \ket{v_t} \ket{0} \ket{\boldsymbol{\psi}_l} \ket{v_l} \\
+    &\xrightarrow{O_Y}
+    \frac{1}{\sqrt{|V_l|}} \sum_{v_l \in V_l} \ket{0} \ket{\boldsymbol{\psi}_t} \ket{v_t} \ket{y_l} \ket{\boldsymbol{\psi}_l} \ket{v_l} \\
+    &\xrightarrow{H_a \cdot \text{c-swap} \cdot H_a}\ket{\boldsymbol \psi_f}=
+    \frac{1}{\sqrt{|V_l|}} \sum_{v_l \in V_l} \left( \ket{0} \ket{\boldsymbol{\psi}_+} + \ket{1} \ket{\boldsymbol{\psi}_-} \right) \ket{v_l},
+\end{aligned}
+\end{equation}
+\noindent where \(\ket{\boldsymbol \psi_{\pm}}=\ket{\boldsymbol \psi_t}(\ket{v_t}\ket {y_l} )\ket{\boldsymbol \psi_l}\pm\ket{\boldsymbol \psi_l}(\ket{v_t}\ket {y_l} )\ket{\boldsymbol \psi_t}\). 
+The swap-test classifier computes the fidelity, i.e., the squared overlap between two states. This yields \( |\langle \psi | \phi \rangle|^2 \) for two pure states \( |\psi\rangle \) and \( |\phi\rangle \), and more generally \( \mathrm{Tr}(\rho \sigma) \) for two possibly mixed states \( \rho \) and \( \sigma \). Fidelity serves as a similarity measure (one if the states are identical, zero if they are orthogonal), making it a natural distance measure in the quantum feature space. Classification thus relies directly on distances between training and test data, unifying feature mapping and classification into a single quantum procedure without requiring an intermediate classical support vector machine.
+
+%
+%
+%
+%
+\begin{figure*}    \includegraphics[width=\textwidth]{imgs/compare-methods.png}    
+    \caption{\label{fig:compare-methods}
+    \textbf{Experimental setup for QMME and classical embedding comparison and performance evaluation.}
+    %
+    \textbf{(a)} The dataset consists of 6 850 genes, of which 590 (in orange) are known cancer driver genes~\cite{10.1093/nar/gky1015}. The remaining 6 260 genes have unknown labels, as they are not part of the CGC dataset.
+    %
+    \textbf{(b)} Embeddings for each gene \(v\) are obtained via two methods: the Quantum Multi-order Moment Embedding (QMME) protocol, and the Moment Propagation (MoPro) embedding with hyperparameter \(t=1\)~\cite{gumpinger2020prediction}. The QMME approach is implemented via algebraic computations on classical software.
+    %
+    \textbf{(c)} In \textit{each random split}, 80\% of the positive genes are selected and combined with an equal number of unlabeled genes (assigned a negative class label) to form the labeled training set $V_l$. The remaining genes form the test set $V_t$, whose labels are used only for evaluation. For both embedding methods, kernel matrices are computed and the expectation values in~\cref{eq:expectation-values} are evaluated on all test genes. This process is repeated across 50 random splits, and performance metrics are averaged.
+    }  
+\end{figure*}
+%
+%
+%
+
+The measurement and post-processing involves evaluating the expectation value of the two-qubit observable \(\sigma_z^{(a)} \sigma_z^{(l)}\), where the superscripts indicate the ancilla and label qubit. For the final state \(\ket{\boldsymbol \psi_f}\), \(\langle \sigma_z^{(a)} \sigma_z^{(l)} \rangle\) is given by
+\begin{align}
+\langle \sigma_z^{(a)} \sigma_z^{(l)} \rangle &= \mathrm{Tr} \left( \sigma_z^{(a)} \sigma_z^{(l)} \ket{\boldsymbol \psi_f}\bra{\boldsymbol \psi_f} \right) \\
+&= \frac{1}{|V_l|} \sum_{v_l \in V_l} (-1)^{y_{v_l}} |\langle \boldsymbol \psi_t |\boldsymbol \psi_{v_l}\rangle|^2.
+\label{eq:expectation-values}
+\end{align}
+\noindent In practice, these statistics are obtained by repeating \(r\) times the two-qubit projective measurement in the \(\sigma_z\) basis. Using \(\text{Tr}(\sigma_z\ket{y_{v_l}}\bra{y_{v_l}})=1\) for \(y_{v_l}=0\) and \(-1\) for \(y_{v_l}=1\), the expectation value is calculated as 
+\begin{equation}
+    \langle \sigma_z^{(a)} \sigma_z^{(l)} \rangle = \frac{1}{r} \left( c_{00} - c_{01} - c_{10} + c_{11} \right),
+\end{equation}
+where \(c_{a l}\) counts measurements with the ancilla in state \(a\) and the label qubit in state \(l\). 
+The test data are classified as 0 if \(\langle \sigma_z^{(a)} \sigma_z^{(l)} \rangle>0\) and 1 if negative, i.e.,
+\begin{equation}\label{eq:test-labels-predict}
+\begin{aligned}
+\hat{y}_v &= \frac{1}{2} \left( 1 - \mathrm{sgn} \, \langle \sigma_z^{(a)} \sigma_z^{(l)} \rangle \right) \\
+&= \mathcal{C}\left(U_\mathcal{G}\ket{v} \ket{0}^{\otimes{\mathfrak m}} \right)
+\end{aligned}
+\end{equation}
+which resembles the earlier formulation in~\Cref{eq:goal}. Here, \(\mathcal C\) is the swap-test classifier and \(U_\mathcal G\) corresponds to the Quantum Multi-order Moment Embedding (QMME), encoding local properties in the network \(\mathcal G\).
+%
+%The Hadamard-based classifier with estimating the expectation value of a two-qubit observable without post-selection, providing computational speedups. However, it can suffer from diminished discriminatory power compared to the swap-test polynomial kernel, particularly in scenarios with label imbalance. This distinction manifests in our simulations as occasional failures of the Hadamard classifier to reproduce expected label separations.
+% We adapt the framework via balancing. To address imbalances in the training labels, instead of the Hadamard gate, one can initialize the index qubits of the labeled nodes \( (v_l) \) with an equal number of positive and negative nodes. This balancing acts on the sum of inner products as expressed in Equation (9) of the original paper, ensuring that label prevalence does not disproportionately influence classification outcomes.
+% In quantum optics, the swap-test has a simple physical implementation, not so obvious for gate-based quantum computers, such as superconducting ones from IBM and Google, and the IonQ’s trapped-ion quantum computer~\cite{cincio2018learning}.
+\section{V. Results and Analysis}
+%
+%
+%
+\noindent \href{https://github.com/apatriciamarques/Network-Based-Prediction}{The implementation and all data used in this work are openly available on GitHub}.
+
+% Additionally, we incorporated label-dependent weighting factors \( w_m \) designed to correct for label parity discrepancies. These weights satisfy the normalization condition
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%\begin{equation}
+%    \sum_{l_v=0} w_{v|l_v=0} = \sum_{l_v=1} w_{v|l_v=1},
+%\end{equation}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%\noindent and explicitly account for the number of training nodes \( N_0, N_1 \) in each class. This weighting strategy, inspired by the theoretical formulation but rarely emphasized in prior work, substantially improved classification performance in our Quantum Metric Mean Embedding plus Quantum Classifier (QMME+QC) setting.
+
+
+\subsection{A. Dataset Description}
+%
+%
+%
+\noindent  We construct our dataset from the OmniPath protein-protein interaction (PPI) network, accessed via the \texttt{OmnipathR} R package, which captures pairwise gene interactions at the protein level. 
+Each node is annotated with its \(-\log_{10}\) MutSig \(P\)-value~\cite{lawrence2014discovery}, and nodes without MutSig values are removed. 
+The resulting network contains 6 850 genes and 27 075 interactions, forming the candidate set for node classification. 
+Ground-truth labels are obtained from the Cancer Gene Census (CGC) in the COSMIC database~\cite{10.1093/nar/gky1015}. Tier 1 genes have documented cancer-relevant activity and mutations that promote oncogenic transformation, while Tier 2 genes show strong but less extensive evidence.
+Both Tier 1 and Tier 2 CGC genes are treated as positives, totaling 590 cancer genes (\(\sim 8.6\%\) of the dataset). 
+The remaining genes are considered negative for the purposes of this work, though they are not confirmed negatives and may include undiscovered cancer drivers. 
+%
+\subsection{B. Performance Evaluation}
+%
+% Classical simulations of quantum circuits. [ongoing] performance against state-of-the-art classical baselines.
+% As I want to baby the reader more, explain what’s the Kronecker product.
+%
+\noindent In supervised classification, one challenge is class imbalance: the number of positive samples (cancer genes) is much smaller than the pool of negative or unlabeled samples. Left unaddressed, this imbalance bias the model toward predicting negatives. To mitigate this, we balance the dataset by randomly selecting an equal number of negatives to match the positives. This ensures that the classifier is trained on a fair representation of both classes.  
+%
+This balancing is particularly important for the quantum setting, since the first step of state preparation involves constructing a superposition over labeled nodes. An unbalanced distribution would lead to skewed amplitudes.
+%
+After balancing, the training set consists of 944 genes (472 positives and 472 negatives). The test set is evaluated in 50 independent batches, each containing 236 samples (118 positives and 118 negatives). Performance is averaged across these batches.  
+%
+\begin{table}[h]
+    \centering
+        \caption{\textbf{Results of cancer gene classification using QMME embeddings}. Metrics are averaged over 50 balanced test batches.}
+    \begin{tabular}{|c|c|}
+        \hline
+        \textbf{Metric} & \textbf{Value} \\
+        \hline Accuracy & 0.5069\\ 
+        \hline Precision & 0.5072\\ 
+        \hline Recall & 0.5763\\ 
+        \hline F1-Score & 0.5392\\ 
+        \hline
+    \end{tabular}
+\end{table}
+%
+% Finally, to validate our code, we replicated the simplest swap-test classifier example from the reference paper, involving two nodes each with two features. This test confirmed the correctness of our swap-test classifier implementation and helped isolate errors unrelated to core classification logic.
+%
+% Experiments with label imbalance showed that equal weighting of nodes across classes generally yields the anticipated classification results. However, the introduction of differential weights \( w_m \) to compensate for label parity markedly improved classification confidence and accuracy. Some unexpected deviations appeared in more intricate examples, likely due to the nonlinear influence of polynomial kernels embedded in the swap-test procedure.
+% Having a balanced-label dataset was critical to balancing contributions from positive and negative classes, effectively mitigating biases arising from dominant label frequencies.
+% Simulations comparing the Hadamard classifier to the swap-test revealed trade-offs: while the Hadamard approach benefits from reduced quantum resource demands and faster runtime, it is prone to misclassification under strong label imbalance or suboptimal weighting.
+% Overall, our numerical results demonstrate the nuanced interplay between quantum circuit design, label balancing, and kernel choice in the performance of quantum classifiers, highlighting directions for future refinement and optimization.
+%
+For comparison with the classical Moment Propagation embeddings, we use the same distance-based classification procedure as in the QMME pipeline. This ensures a fair comparison based solely on feature similarity rather than classifier differences.
+%
+\subsection{C. Complexity Analysis}
+\label{sec:complexity}
+%
+\noindent We analyze the complexity of the embedding circuit \(U_\mathcal G\) in~\Cref{table:complexity}. 
+Let \( d' \) denote the precision (in qubits) used to encode both feature values and node degrees. 
+The number of oracle calls required for a single application of \(U_\mathcal G\) is constant. 
+The Hadamard gates contribute a cost that scales as \(\mathcal{O}(\log s)\) within the unitary operator \(U_\mathcal G\), and as \(\mathcal{O}(\log |V_l|)\) across the entire quantum pipeline. 
+Overall, the dominant contribution to the total gate complexity arises from arithmetic operations that are part of oracle subroutines (see the Appendix~\ref{appendix:complexity-analysis-in-detail}for a detailed breakdown).
+%
+%
+
+\begin{table}[h] % here
+    \centering
+    \normalsize
+    \caption{\label{table:complexity}\textbf{Complexity analysis for the QMME protocol.} \(U_\mathcal G\) complexity estimates for \(n\)-sparse and general graphs, in terms of gate count, circuit depth, qubit requirements, and query complexity, i.e., calls to the input model.}.
+    \label{tab:complexity}
+    {\normalsize
+    \begin{tabular}{|c|c|c|}
+    \hline
+    \multirow{2}{*}{\textbf{Metric}} & \multicolumn{2}{c|}{\textbf{Adjacency Matrix}} \\
+    \cline{2-3}
+     & \textbf{\(s\)-sparse} & \textbf{General} \\
+    \hline
+    Gate complexity & \(\mathcal O(\text{polylog} N + d')\) & \(\mathcal O(\text{polylog} N + d')\) \\
+    \hline
+    Circuit depth & \(\mathcal O(1)\) & \(\mathcal O(1)\) \\
+    \hline
+    Qubit count & \(\mathcal O(\text{polylog} N + d')\) & \(\mathcal O(\text{polylog} N + d')\) \\
+    \hline
+    Query complexity & \(\mathcal O(\log^2 s)\) & \(\mathcal O(\log^2 N)\) \\
+    \hline
+    \end{tabular}
+    }
+\end{table}
+%
+\noindent Circuit depth is the number of sequential layers of gates, i.e., the computation length, and measures time complexity. The number of qubits is the size of the quantum register, which measures space (memory) complexity. Thus, computation time is independent of network size, and space complexity is logarithmic on it.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\section{VII. Discussion and Conclusions}
+%
+%
+%
+\noindent In this work, we introduce an almost fully quantum pipeline for cancer driver gene prediction based on a swap-test classifier, requiring no classical optimization loops. All stages of encoding, embedding, and inference are performed within the quantum domain, requiring only minimal data access assumptions and limited classical post-processing. Our approach demonstrates logarithmic resource scaling together with solid performance on protein-protein interaction (PPI) network data.
+%
+The proposed \textit{Quantum Multi-order Moment Embedding} (QMME) is a general and extensible architecture for encoding local graph statistics into quantum states. While we focus on binary classification of genes as cancer drivers using PPI networks (with nodes representing genes and MutSig \(P\)-values as features), the QMME framework is broadly applicable to node-level classification tasks on feature-labeled graphs across domains~\cite{bi2023mm}. 
+%
+Future directions include extending QMME to capture higher-order moments, supporting weighted graphs, enabling multi-class classification, and implementing resource-efficient variants suitable for near-term quantum hardware.
+%
+% [mention limitations]
+% [adress o porquê de escolher momentos até ordem 4. e de como cada parte do circuito (1-hop, 2-hop) contribui para a performance]
+
+\nocite{*}
+
+\bibliographystyle{apsrev4-2}
+\bibliography{apssamp}
+
+\clearpage
+\onecolumngrid
+\appendix
+\section{Quantum Node Embedding Step-by-step Derivation}
+\label{appendix:mapping}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\noindent \(U_r\) denotes the operator \(U\) acting on register \(r\), with identity on all other registers; \(\mathrm{C}\text{ - }U_r\) the controlled application of \(U_r\), with the control qubit in register \(c\) being in state \(\ket{1}\); and \(\mathrm{C}^{(0)}\text{ - }U_r\) indicates control on the \(\ket{0}\) state of \(c\).
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\newcommand{\zero}[1]{0^{#1}}
+\newcommand{\ketzero}[1]{\ket{0^{#1}}}
+\newcommand{\rvl}{r(v,\ell_1)}
+%\newcommand{\rvl}{\mathcal{N}^1_v(\ell_1)}
+%\newcommand{\rrvll}{r(\rvl, \ell_2)}
+\newcommand{\rrvll}{r(\mathcal{N}^1_v(\ell_1), \ell_2)}
+\newcommand{\garbage}{\ket{\perp}}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\begin{align*}
+% === Initial Hadamard ===
+&\ket{v,0^{ \mathfrak m}} \quad \text{where } \mathfrak m = 2\log N +8, \text{omitting work qubits,}% Consider a total of \mathfrak m 3\log N +8 qubits
+\\
+&\mathrel{\xrightarrow{I_{n-\mathfrak{s}}\otimes H^{\otimes \mathfrak{s}}_{l_1}}} 
+\frac{1}{\sqrt{s}} \ket{v,0^{{3}}} \sum_{\ell_1\in[s]} \ket{\ell_1, \zero{(n + 5)}} 
+\\
+% === First Oracle (O_L) ===
+&\mathrel{\xrightarrow{(O_L)_{v,l_1}}} 
+\frac{1}{\sqrt{s}} \ket{v,0^{{3}}} \sum_{\ell_1\in[s]} \ket{\rvl, \zero{(n+5)}} 
+\\
+% === Introduce control bit c ===
+&\mathrel{\xrightarrow{H_c}} 
+\frac{1}{\sqrt{2s}} \ket{v} \sum_{c\in[2]} \sum_{\ell_1\in[s]} \ket{c, 0^{{2}}, \rvl, \zero{(n + 5)}} 
+\\
+% === Control Hadamard for \ell_2 ===
+&\mathrel{\xrightarrow{I_{n-\mathfrak{s}}\otimes C\text{-}H^{\otimes \mathfrak{s}}_{\ell_2}}} 
+\frac{1}{\sqrt{2s}} \ket{v} \sum_{\ell_1\in[s]} \Biggl( \ket{0_c, 0^{{2}}, \rvl, \zero{(n+5)}} 
++ \frac{1}{\sqrt{s}} \sum_{\ell_2\in[s]} \ket{1_c, 0^{{2}}, \rvl, \ell_2,\zero{5}} \Biggr)
+\\
+% === Second Oracle ===
+&\mathrel{\xrightarrow{C\text{-}(O_L)_{\ell_1,\ell_2}}} 
+\frac{1}{\sqrt{2s}} \ket{v} \sum_{\ell_1\in[s]} \Biggl( \ket{0_c, 0^{{2}}, \rvl, \zero{(n+5)}} 
++ \frac{1}{\sqrt{s}} \sum_{\ell_2\in[s]} \ket{1_c, 0^{{2}}, \rvl, \rrvll,\zero{5}} \Biggr)
+\\
+% === Apply H to i index ===
+&\mathrel{\xrightarrow{H^{\otimes 2}_i}} 
+\frac{1}{2^{3/2}\sqrt{s}} \ket{v} \sum_{\ell_1\in[s]} \sum_{i\in[4]} \Biggl( \ket{0_c, i, \rvl, \zero{(n+5)}} 
++ \frac{1}{\sqrt{s}} \sum_{\ell_2\in[s]} \ket{1_c, i, \rvl, \rrvll,\zero{5}} \Biggr)
+\\
+% === Apply Oracle O_X (on c=0) ===
+&\mathrel{\xrightarrow{C^{(0)}\text{-}(O_X)_{i,a,l_1}}} 
+\frac{1}{2^{3/2}\sqrt{s}} \ket{v} \sum_{\ell_1,i} \Biggl( \bigl(x_{\rvl}^i\ket{0_c, i, \rvl, \zero{(n+4)}}+\ket{\perp}\bigr)\ket 0 
++ \frac{1}{\sqrt{s}} \sum_{\ell_2\in[s]} \ket{1_c, i, \rvl, \rrvll, \zero{5}} \Biggr)
+\\
+% === Apply Oracle O_X (done, global, c=1) ===
+&\mathrel{\xrightarrow{C\text{-}(O_X)_{i,a,\ell_2}}} 
+\frac{\ket{v}}{2^{3/2}\sqrt{s}} \sum_{\ell_1,i} \Biggl( x_{\rvl}^i \ket{0_c, i, \rvl, \zero{(n+5)}} 
++ \frac{1}{\sqrt{s}} \sum_{\ell_2\in[s]} x_{\rrvll}^i \ket{1_c, i, \rvl, \rrvll,\zero{5}} \Biggr)
++ \ket{v} \garbage \ket{0} 
+\\
+% === Rewrite \rrvll register to \ell_2 ===
+&\mathrel{\xrightarrow{C\text{-}(O_L^T)_{\ell_1,\ell_2}}} 
+\frac{1}{2^{3/2}\sqrt{s}} \ket{v} \sum_{\ell_1,i} \Biggl( x_{\rvl}^i \ket{0_c, i, \rvl, \zero{(n+5)}} 
++ \frac{1}{\sqrt{s}} \sum_{\ell_2\in[s]} x_{\rrvll}^i \ket{1_c, i, \rvl, \ell_2,\zero{5}} \Biggr)
++ \ket{v} \garbage \ket{0} 
+\\
+% === Reverse Hadamard on \ell_2 ===
+&\mathrel{\xrightarrow{I_{n-\mathfrak{s}}\otimes C\text{-}H^{\otimes \mathfrak{s}}_{\ell_2}}} 
+\frac{1}{2^{3/2}\sqrt{s}} \ket{v} \sum_{\ell_1,i} \Biggl( x_{\rvl}^i \ket{0_c, i, \rvl} 
++ \frac{1}{\sqrt{s}} \sum_{x' \in \mathcal{X}_{\rvl}^1} x'^i \ket{1_c, i, \rvl} \Biggr) \ketzero{(n + 5)} 
++ \ket{v} \garbage \ket{0} 
+\\
+% === Reverse first O_L ===
+&\mathrel{\xrightarrow{(O_L^T)_{v,l_1}}}  
+\frac{1}{2^{3/2}\sqrt{s}} \ket{v} \sum_{\ell_1,i} \Biggl( x_{\rvl}^i \ket{0_c, i, \ell_1} 
++ \frac{1}{s} \sum_{x' \in \mathcal{X}_{\rvl}^1} x'^i \ket{1_c, i, \ell_1} \Biggr) \ketzero{(n+5)} 
++ \ket{v} \garbage \ket{0} 
+\\
+% === Reverse H on \ell_1 ===
+&\mathrel{\xrightarrow{I_{n-\mathfrak{s}}\otimes H^{\otimes \mathfrak{s}}_{l_1}}}  
+\frac{1}{2^{3/2}s} \ket{v} \sum_{i\in[4]} \Biggl( \sum_{x' \in \mathcal{X}_{\rvl}^1} x'^i \ket{0_c} 
++ \frac{1}{s} \sum_{x'' \in \mathcal{X}_v^2} x''^i \ket{1_c} \Biggr) \ket{i, \zero{(2n + 5)}} 
++ \ket{v} \garbage \ket{0} 
+\\
+% === Uncompute node degree ===
+&\mathrel{\xrightarrow{(O_{K^{-1}})_{v,k}}}  
+\frac{1}{2^{3/2}s} \ket{v} \sum_{i\in[4]} \Biggl( \sum_{x' \in \mathcal{X}_{\rvl}^1} x'^i \ket{0_c} 
++ \frac{1}{s} \sum_{x'' \in \mathcal{X}_v^2} x''^i \ket{1_c} \Biggr) \frac{1}{k_v^c} \ket{i, \zero{(2n + 5)}} 
++ \ket{v} \garbage
+\\ 
+&= \ket{v} \Biggl( \sum_{i,c} \frac{1}{2^{3/2} s^{c}} \sum_{x_u \in \mathcal X_v^c}\frac{x_u^i}{k_v^c}\ket{c,i,0^{ ({2n + 5})}} + \garbage \Biggr) 
+\\ 
+&= \ket{v} \Biggl( \sum_{i,c} \frac{1}{2^{3/2} s^{c}} \varphi(\mathcal{X}^c_v) \ket{c,i,0^{ ({2n + 5})}} + \garbage \Biggr) 
+\\
+&= \ket{v} \Biggl( \sum_{j\in [8]} c_j m_{v,j} \ket{j,0^{({2n + 5})}} + \garbage \Biggr) \quad \text{with \(\boldsymbol c\) defined as in~\cref{eq:c-constant-vector}.}
+\end{align*}
+%
+%
+%
+% proof/encoding like in Duarte Magano's work
+
+%
+%
+%
+%
+%The adjacency matrix \(A\) of a graph is generally non-unitary and thus cannot be directly implemented as a quantum operation. A common approach to encode such non-unitary matrices into quantum circuits is through \emph{block-encoding}~\cite{martyn2021grand, camps2024explicit}. Under this model, we assume access to a unitary operator \(U_{\mathcal{G}}\) that acts as
+% Explain like Theorem 4.1. Block-encoding of s-sparse matrices and 8. Block-encoding of Hermitian Sparse Matrices (2023) of explicit~\cite{arora2009computational, martyn2021grand, camps2024explicit}. % use the term diffusion operator / and/or simply use D_s like them (think if I rather call it that, or not).
+\section{Complexity Analysis in Detail}
+\label{appendix:complexity-analysis-in-detail}
+\noindent 
+\begin{table*}[h]
+\centering
+\normalsize
+\caption{\textbf{Quantum Gate Complexity and Queries for Various Sources}}
+\label{tab:qmmep_complexity}
+\begin{tabular}{|l|p{4cm}|c|c|c|c|}
+\hline
+\textbf{Operator} & \textbf{Description} & \textbf{Gate Complexity (Count)} & \textbf{Qubit Count} & \textbf{Query Complexity} \\
+\hline 
+\(H\) & elementary gate & \(1\) & \(1\) & - \\
+\hline
+\(O_L\) & input model & \(\mathcal O(\text{polylog }N+d')\)  & \(\mathcal O(\log N)\) & \(\mathcal O(1)\) \\
+\hline
+\(\tilde O_X\) & input model & \(\mathcal O(\text{polylog }N+d')\) & \(\mathcal O(\log N+d')\) & \(\mathcal O(1)\) \\
+\hline
+\(\tilde O_K\) & derived from \(O_L\) & \(\mathcal O(\text{polylog }N+d')\)  & \(\mathcal O(\log N+d')\) & \(\mathcal O(\log^2 s)\) \\
+\hline
+\(F_X\) & type of \(R_y\) & \(\mathcal O (d')\) & \(\mathcal O( d')\) & - \\
+\hline
+\(F_{K^{-1}}\) & type of \(R_y\) (INV) & \(\mathcal O (d')\) & \(\mathcal O(d')\) & - \\
+\hline
+\(O_X\) & \(1 \, \tilde O_X\cdot  5\, \text{c-}F_X\cdot 1  \tilde O_X^T\) &  \(\mathcal O(\text{polylog }N+d')\) & \(\mathcal O(\log N+d')\) & - \\
+\hline
+\(O_{K^{-1}}\) & \(1 \, \tilde O_K\cdot 1\, F_{K^{-1}}\cdot 1\, \tilde O_K^T\) &  \(\mathcal O(\text{polylog }N+d')\) & \(\mathcal O(\log N+d')\) & \(\mathcal O(\log^2 s)\) \\
+\hline
+\end{tabular}
+\end{table*}
+%
+\noindent We can construct a quantum circuit to implement oracles \(O_L\) and \(\tilde O_X\) with \(\mathcal O(\text{polylog }N+d')\) elementary gates~\cite{tong2021fast}. The rotation operators are simply controlled versions of single–qubit \(R_y(\theta )\) rotations, with the angle computed from the \(d'\)-qubits in the control register. Using simple fixed-point arithmetic, such operators scale as \(\mathcal O (d')\).
+% However, some queries can be (provably) difficult to implement, and then there can be a large gap between the query complexity and gate complexity. In order to obtain a meaningful query complexity analysis, one should also make sure that other components of the quantum algorithm will not end up dominating the total gate complexity, when all factors are taken into account. from scinetici noes.
+% Gentle intro to quantum circuit: In the standard circuit model of quantum computation, the efficiency of a quantum algorithm is computed in terms of the circuit complexity, the number of basic gates together with the number of qubits used, of the circuits used to implement the algorithm. + Black box algorithms of low query complexity, algorithms that solve a black box problem with few calls to the oracle, are only of practical use if the black box has an efficient implementation.
+% The black box approach is very useful, however, in establishing lower bounds on the circuit complexity of a problem. If the query complexity is (N)—in other words, at least (N) calls to the oracle are required—then the circuit complexity must be at least (N).
+%
+\twocolumngrid
+\end{document}

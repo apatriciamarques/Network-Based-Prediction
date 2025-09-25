@@ -1,0 +1,124 @@
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+from scipy.stats import skew, kurtosis
+
+DTYPE = np.float32
+KERNEL_FILE = f"mopro_kernel_matrix.npy"
+show = False  # plotting toggle
+
+# -------------------------
+# Load Data
+# -------------------------
+
+def input_data(show=False):
+    print("\nImporting dataset (edges, degrees, features)...")
+    edgesRaw = pd.read_csv("dataset/OmniPath_gene_edges_filtered_with_index.csv")
+    degreesRaw = pd.read_csv("dataset/OmniPath_gene_degrees_filtered_with_index.csv")
+    featuresRaw = pd.read_csv("dataset/MutSig_gene_pvalues_filtered_with_index.csv")
+    genes_all = pd.read_excel("dataset/Census_all.xlsx")
+    print("Finished.")
+
+    # --- Extract degrees ---
+    nodeDegrees = degreesRaw.iloc[:, 2].astype(int).to_numpy()
+    nrNodes = len(nodeDegrees)
+
+    # --- Extract features ---
+    features = featuresRaw.iloc[:nrNodes, 3].astype(float).to_numpy()
+    featuresGenes = featuresRaw.iloc[:nrNodes, 1].astype(str).to_numpy()
+
+    if show:
+        plt.hist(features, bins=100, log=True)
+        plt.xlabel("-log10 Mutsig P-values"); plt.ylabel("Frequency")
+        plt.title("Distribution of features")
+        plt.show()
+
+    # --- Build adjacency list ---
+    adjacencyList = [[] for _ in range(nrNodes)]
+    edges = edgesRaw.iloc[:, [0, 2]].astype(int).to_numpy()
+    for v, u in edges:
+        adjacencyList[v-1].append(u-1)
+        adjacencyList[u-1].append(v-1)
+
+    # --- Labels ---
+    genes_all_set = set(genes_all['Gene Symbol'].values)
+    classLabels = np.array([1 if g in genes_all_set else 0 for g in featuresGenes], dtype=DTYPE)
+
+    print(f"Nodes: {nrNodes}")
+    print(f"Positives: {classLabels.sum()} / {len(classLabels)}")
+
+    return nrNodes, adjacencyList, features, classLabels
+
+# -------------------------
+# Moment-Based Embeddings
+# -------------------------
+
+def build_node_embeddings(adjacencyList, features, unique_second_neighbors=True):
+    """
+    Each node gets an 8-dim embedding:
+    [mean1, std1, skew1, kurt1, mean2, std2, skew2, kurt2]
+
+    Parameters
+    ----------
+    unique_second_neighbors : bool
+        If True  -> use unique 2-hop neighbors, remove self (clean definition).
+        If False -> use original definition (allow duplicates, keep self).
+    """
+    nrNodes = len(adjacencyList)
+    embeddings = np.zeros((nrNodes, 8), dtype=np.float32)
+
+    for v in range(nrNodes):
+        # 1-hop neighbors
+        n1 = adjacencyList[v]
+        vals1 = features[n1] if n1 else [0]
+        mean1, std1, skew1, kurt1 = np.mean(vals1), np.std(vals1), skew(vals1), kurtosis(vals1)
+
+        # 2-hop neighbors
+        if unique_second_neighbors:
+            # Clean version: unique, no self
+            n2 = set()
+            for u in n1:
+                n2.update(adjacencyList[u])
+            n2.discard(v)
+            vals2 = features[list(n2)] if n2 else [0]
+        else:
+            # Original version: duplicates + keep self
+            n2 = []
+            for u in n1:
+                n2.extend(adjacencyList[u])
+            vals2 = features[n2] if n2 else [0]
+
+        mean2, std2, skew2, kurt2 = np.mean(vals2), np.std(vals2), skew(vals2), kurtosis(vals2)
+
+        embeddings[v] = [mean1, std1, skew1, kurt1, mean2, std2, skew2, kurt2]
+
+    return embeddings
+
+# -------------------------
+# Kernel Matrix
+# -------------------------
+
+def build_kernel_matrix(embeddings, power=2):
+    """
+    Kernel K_ij = (x_i dot x_j)^power
+    """
+    dot_matrix = embeddings @ embeddings.T
+    kernel = np.power(dot_matrix, power)
+    return kernel.astype(DTYPE)
+
+
+# -------------------------
+# Usage
+# -------------------------
+
+nrNodes, adjacencyList, features, classLabels = input_data(show)
+
+print("\nComputing moment-based embeddings...")
+embeddings = build_node_embeddings(adjacencyList, features)
+
+print("Building kernel matrix...")
+kernelMatrix = build_kernel_matrix(embeddings, power=2)
+
+np.save(KERNEL_FILE, kernelMatrix)
+print(f"Kernel matrix saved to {KERNEL_FILE}")
+print("Done.")
