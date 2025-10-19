@@ -10,266 +10,33 @@
 NotebookFileLineBreakTest
 NotebookFileLineBreakTest
 NotebookDataPosition[       154,          7]
-NotebookDataLength[     18389,        471]
-NotebookOptionsPosition[     17068,        438]
-NotebookOutlinePosition[     17501,        455]
-CellTagsIndexPosition[     17458,        452]
+NotebookDataLength[     20073,        466]
+NotebookOptionsPosition[     18855,        434]
+NotebookOutlinePosition[     19288,        451]
+CellTagsIndexPosition[     19245,        448]
 WindowFrame->Normal*)
 
 (* Beginning of Notebook Content *)
 Notebook[{
 
 Cell[CellGroupData[{
-Cell[TextData[{
- "Quantum Circuit to Implement \[Mu]",
- Cell[BoxData[
-  FormBox[
-   RowBox[{"(", 
-    SubscriptBox["\[Chi]", 
-     SubsuperscriptBox["", "\[Nu]", "1"]], ")"}], TraditionalForm]],
-  FormatType->TraditionalForm,ExpressionUUID->
-  "88f75841-8fad-144c-bdcc-837eeae68fdc"]
-}], "Title",
- CellChangeTimes->{{3.9465347553199196`*^9, 
-  3.9465348700536327`*^9}},ExpressionUUID->"e7f5290d-210a-664d-a015-\
+Cell["Graph Augmentation (limit on extra nodes number)", "Title",
+ CellChangeTimes->{{3.9465347553199196`*^9, 3.9465348700536327`*^9}, 
+   3.969874526562908*^9},ExpressionUUID->"e7f5290d-210a-664d-a015-\
 de7ee07ec8a4"],
-
-Cell["Graph Augmentation (limit on extra nodes number)", "Subtitle",
- CellChangeTimes->{{3.949052342408695*^9, 3.9490523451141415`*^9}, {
-  3.9647598929973164`*^9, 
-  3.9647598960731964`*^9}},ExpressionUUID->"ce37bcdc-7aab-0a4c-aaf7-\
-1a399344fbc2"],
-
-Cell[CellGroupData[{
-
-Cell[TextData[{
- "Is there an upper boundary on ",
- Cell[BoxData[
-  FormBox[
-   TemplateBox[<|"boxes" -> FormBox[
-       StyleBox["m", "TI"], TraditionalForm], "errors" -> {}, "input" -> "m", 
-     "state" -> "Boxes"|>,
-    "TeXAssistantTemplate"], TraditionalForm]],ExpressionUUID->
-  "23489c99-f3ff-3148-bb47-9b1cb748ffdf"],
- "?"
-}], "Section",
- CellChangeTimes->{{3.949054130751877*^9, 
-  3.949054175295664*^9}},ExpressionUUID->"febdb636-8a6c-824e-8b57-\
-b480d68ffa96"],
-
-Cell[TextData[Cell[BoxData[
- FormBox[
-  TemplateBox[<|"boxes" -> FormBox[
-      RowBox[{
-        StyleBox["m", "TI"], "\[LessEqual]", 
-        FractionBox[
-         RowBox[{
-           StyleBox["d", "TI"], "+", "1", "+", 
-           SqrtBox[
-            RowBox[{
-              SuperscriptBox[
-               RowBox[{"(", 
-                 RowBox[{
-                   StyleBox["d", "TI"], "+", "1"}], ")"}], "2"], "-", "4", 
-              RowBox[{"(", 
-                RowBox[{
-                  StyleBox["l", "TI"], "+", 
-                  StyleBox["s", "TI"]}], ")"}]}]]}], "2"]}], TraditionalForm],
-     "errors" -> {}, "input" -> 
-    "m \\leq \\frac{d+1 + \\sqrt{(d+1)^2 - 4(l+s)}}{2}\n", "state" -> "Boxes"|>,
-   "TeXAssistantTemplate"], 
-  TraditionalForm]],ExpressionUUID->"58e8f508-e8b9-fe48-a7b7-8bfe71cd5e91"]], \
-"Text",
- CellChangeTimes->{{3.949052349946459*^9, 3.949052425253971*^9}, {
-  3.9490525283237705`*^9, 3.9490525521325035`*^9}, {3.9490526451303673`*^9, 
-  3.949052645764183*^9}, {3.949054119086012*^9, 3.949054155608034*^9}, {
-  3.9490541985141315`*^9, 
-  3.949054208269041*^9}},ExpressionUUID->"cd1bf4d0-eff8-d548-bae4-\
-023f8c8a6e22"],
-
-Cell[CellGroupData[{
-
-Cell[BoxData[
- RowBox[{
-  RowBox[{"(*", " ", 
-   RowBox[{"Definition", ":", " ", 
-    RowBox[{"Upper", " ", "bound", " ", "for", " ", "m"}]}], " ", "*)"}], 
-  "\n", 
-  RowBox[{
-   RowBox[{
-    RowBox[{
-     RowBox[{"mUpper", "[", 
-      RowBox[{"d_", ",", " ", "s_", ",", " ", "l_"}], "]"}], " ", ":=", " ", 
-     RowBox[{
-      RowBox[{"(", 
-       RowBox[{"d", " ", "+", " ", "1", " ", "+", " ", 
-        RowBox[{"Sqrt", "[", 
-         RowBox[{
-          RowBox[{
-           RowBox[{"(", 
-            RowBox[{"d", " ", "+", " ", "1"}], ")"}], "^", "2"}], " ", "-", 
-          " ", 
-          RowBox[{"4", " ", 
-           RowBox[{"(", 
-            RowBox[{"l", " ", "+", " ", "s"}], ")"}]}]}], "]"}]}], ")"}], " ",
-       "/", " ", "2"}]}], ";"}], "\n", 
-   RowBox[{"(*", " ", 
-    RowBox[{"Definition", ":", " ", 
-     RowBox[{"Lower", " ", "bound", " ", "for", " ", "m", " ", 
-      RowBox[{"(", 
-       RowBox[{"ceiling", " ", "function"}], ")"}]}]}], " ", "*)"}], "\n", 
-   RowBox[{
-    RowBox[{
-     RowBox[{"mLower", "[", 
-      RowBox[{"d_", ",", " ", "s_"}], "]"}], " ", ":=", " ", 
-     RowBox[{"Ceiling", "[", 
-      RowBox[{"s", "/", "d"}], "]"}]}], ";"}], "\n", "\n", 
-   RowBox[{"(*", " ", 
-    RowBox[{
-    "Region", " ", "Plot", " ", "with", " ", "interactive", " ", "l", " ", 
-     "parameter"}], " ", "*)"}], "\n", 
-   RowBox[{"Manipulate", "[", "\n", "  ", 
-    RowBox[{
-     RowBox[{"RegionPlot3D", "[", "\n", "    ", 
-      RowBox[{
-       RowBox[{
-        RowBox[{
-         RowBox[{
-          RowBox[{"m", "^", "2"}], " ", "-", " ", 
-          RowBox[{
-           RowBox[{"(", 
-            RowBox[{"d", " ", "+", " ", "1"}], ")"}], " ", "m"}], " ", "+", 
-          " ", 
-          RowBox[{"(", 
-           RowBox[{"l", " ", "+", " ", "s"}], ")"}]}], " ", ">=", " ", "0"}], 
-        " ", "&&", " ", 
-        RowBox[{"m", " ", ">=", " ", 
-         RowBox[{"mLower", "[", 
-          RowBox[{"d", ",", " ", "s"}], "]"}]}]}], ",", " ", 
-       RowBox[{"(*", " ", 
-        RowBox[{"Both", " ", "conditions"}], " ", "*)"}], "\n", "    ", 
-       RowBox[{"{", 
-        RowBox[{"d", ",", " ", "20", ",", " ", "5000"}], "}"}], ",", "  ", 
-       RowBox[{"(*", " ", 
-        RowBox[{"Range", " ", "for", " ", "d", " ", 
-         RowBox[{"(", "degree", ")"}]}], " ", "*)"}], "\n", "    ", 
-       RowBox[{"{", 
-        RowBox[{"s", ",", " ", "500", ",", " ", "500000"}], "}"}], ",", "  ", 
-       RowBox[{"(*", " ", 
-        RowBox[{"Range", " ", "for", " ", "s", " ", 
-         RowBox[{"(", 
-          RowBox[{"missing", " ", "connections", " ", "sum"}], ")"}]}], " ", 
-        "*)"}], "\n", "    ", 
-       RowBox[{"{", 
-        RowBox[{"m", ",", " ", "0", ",", " ", "1000"}], "}"}], ",", "  ", 
-       RowBox[{"(*", " ", 
-        RowBox[{"Range", " ", "for", " ", "m", " ", 
-         RowBox[{"(", 
-          RowBox[{"number", " ", "of", " ", "extra", " ", "nodes"}], ")"}]}], 
-        " ", "*)"}], "\n", "    ", 
-       RowBox[{"PlotPoints", " ", "->", " ", "50"}], ",", " ", 
-       RowBox[{"(*", " ", 
-        RowBox[{"Increase", " ", "resolution"}], " ", "*)"}], "\n", "    ", 
-       RowBox[{"AxesLabel", " ", "->", " ", 
-        RowBox[{"{", 
-         RowBox[{"\"\<d\>\"", ",", " ", "\"\<s\>\"", ",", " ", "\"\<m\>\""}], 
-         "}"}]}], ",", "\n", "    ", 
-       RowBox[{"PlotStyle", " ", "->", " ", 
-        RowBox[{"Opacity", "[", 
-         RowBox[{"0.5", ",", " ", "Blue"}], "]"}]}], ",", " ", 
-       RowBox[{"(*", " ", 
-        RowBox[{
-        "Shade", " ", "valid", " ", "region", " ", "in", " ", "blue"}], " ", 
-        "*)"}], "\n", "    ", 
-       RowBox[{"Mesh", " ", "->", " ", "None"}], ",", "\n", "    ", 
-       RowBox[{"BoundaryStyle", " ", "->", " ", 
-        RowBox[{"{", 
-         RowBox[{"Thick", ",", " ", "Red"}], "}"}]}], ",", "  ", 
-       RowBox[{"(*", " ", 
-        RowBox[{"Highlight", " ", "boundary", " ", "in", " ", "red"}], " ", 
-        "*)"}], "\n", "    ", 
-       RowBox[{"Boxed", " ", "->", " ", "True"}]}], "\n", "  ", "]"}], ",", 
-     "\n", "  ", 
-     RowBox[{"{", 
-      RowBox[{"l", ",", " ", "0", ",", " ", "1", ",", " ", "1"}], "}"}]}], 
-    " ", 
-    RowBox[{"(*", " ", 
-     RowBox[{"Slider", " ", "for", " ", 
-      RowBox[{"l", ":", " ", 
-       RowBox[{"0", " ", "or", " ", "1"}]}]}], " ", "*)"}], "\n", 
-    "]"}]}]}]], "Code",
- CellChangeTimes->{{3.9490525960345592`*^9, 3.949052643024475*^9}, {
-  3.9490526755706215`*^9, 3.9490526922395535`*^9}, {3.949053032141527*^9, 
-  3.949053050309561*^9}, {3.9490531996547527`*^9, 3.9490532009646473`*^9}, {
-  3.9490533318389606`*^9, 3.9490534109748287`*^9}, {3.9490535572250156`*^9, 
-  3.94905355813365*^9}, {3.949053713157837*^9, 3.9490537364443283`*^9}, {
-  3.949053784465622*^9, 3.9490537853971405`*^9}, {3.9490538618491096`*^9, 
-  3.9490538805621376`*^9}, {3.9490539724218655`*^9, 3.9490539726211987`*^9}, {
-  3.9491426280946884`*^9, 3.9491426352006664`*^9}, {3.949142690238043*^9, 
-  3.949142725536953*^9}},
- CellLabel->"In[1]:=",ExpressionUUID->"01708ccd-1eb7-9649-9f2e-8d4bd6f1c624"],
-
-Cell[BoxData[
- TagBox[
-  StyleBox[
-   DynamicModuleBox[{$CellContext`l$$ = 0, Typeset`show$$ = True, 
-    Typeset`bookmarkList$$ = {}, Typeset`bookmarkMode$$ = "Menu", 
-    Typeset`animator$$, Typeset`animvar$$ = 1, Typeset`name$$ = 
-    "\"untitled\"", Typeset`specs$$ = {{
-      Hold[$CellContext`l$$], 0, 1, 1, ControlType -> Manipulator}}, 
-    Typeset`size$$ = {360., {175.54161533861762`, 181.2735491426137}}, 
-    Typeset`update$$ = 0, Typeset`initDone$$, Typeset`skipInitDone$$ = True, 
-    Typeset`keyframeActionsQ$$ = False, Typeset`keyframeList$$ = {}}, 
-    DynamicBox[Manipulate`ManipulateBoxes[
-     1, StandardForm, "Variables" :> {$CellContext`l$$ = 0}, 
-      "ControllerVariables" :> {}, 
-      "OtherVariables" :> {
-       Typeset`show$$, Typeset`bookmarkList$$, Typeset`bookmarkMode$$, 
-        Typeset`animator$$, Typeset`animvar$$, Typeset`name$$, 
-        Typeset`specs$$, Typeset`size$$, Typeset`update$$, Typeset`initDone$$,
-         Typeset`skipInitDone$$, Typeset`keyframeActionsQ$$, 
-        Typeset`keyframeList$$}, "Body" :> RegionPlot3D[
-        And[$CellContext`m^2 - ($CellContext`d + 
-           1) $CellContext`m + ($CellContext`l$$ + $CellContext`s) >= 
-         0, $CellContext`m >= $CellContext`mLower[$CellContext`d, \
-$CellContext`s]], {$CellContext`d, 20, 5000}, {$CellContext`s, 500, 
-         500000}, {$CellContext`m, 0, 1000}, PlotPoints -> 50, 
-        AxesLabel -> {"d", "s", "m"}, PlotStyle -> Opacity[0.5, Blue], Mesh -> 
-        None, BoundaryStyle -> {Thick, Red}, Boxed -> True], 
-      "Specifications" :> {{$CellContext`l$$, 0, 1, 1}}, "Options" :> {}, 
-      "DefaultOptions" :> {}],
-     ImageSizeCache->{
-      622.3275001192093, {203.25245518236764`, 208.9843889863637}},
-     SingleEvaluation->True],
-    Deinitialization:>None,
-    DynamicModuleValues:>{},
-    SynchronousInitialization->True,
-    UndoTrackedVariables:>{Typeset`show$$, Typeset`bookmarkMode$$},
-    UnsavedVariables:>{Typeset`initDone$$},
-    UntrackedVariables:>{Typeset`size$$}], "Manipulate",
-   Deployed->True,
-   StripOnInput->False],
-  Manipulate`InterpretManipulate[1]]], "Output",
- CellChangeTimes->{3.9491416640059967`*^9, 3.9491426387142487`*^9, 
-  3.9491427288712826`*^9, 3.96986932155711*^9},
- CellLabel->"Out[3]=",ExpressionUUID->"23832327-f52d-d041-b190-0fc2add4a7c1"]
-}, Open  ]],
 
 Cell[CellGroupData[{
 
 Cell[TextData[{
  "Simulate ",
  Cell[BoxData[
-  FormBox[
-   TemplateBox[<|"boxes" -> FormBox[
-       StyleBox["m", "TI"], TraditionalForm], "errors" -> {}, "input" -> "m", 
-     "state" -> "Boxes"|>,
-    "TeXAssistantTemplate"], TraditionalForm]],ExpressionUUID->
+  FormBox["m", TraditionalForm]],ExpressionUUID->
   "4cdce47e-038c-2742-8b12-50f22da7e9d5"],
- "."
-}], "Subsection",
- CellChangeTimes->{{3.9490542219974384`*^9, 
-  3.949054230066601*^9}},ExpressionUUID->"3ec6e693-ea45-584f-8509-\
+ ", given subgraph conditions."
+}], "Section",
+ CellChangeTimes->{{3.9490542219974384`*^9, 3.949054230066601*^9}, {
+  3.9698769611674347`*^9, 
+  3.969877002713419*^9}},ExpressionUUID->"3ec6e693-ea45-584f-8509-\
 38365f24f368"],
 
 Cell[CellGroupData[{
@@ -281,164 +48,393 @@ Cell[BoxData[
   RowBox[{
    RowBox[{
     RowBox[{"simulateConditions", "[", 
-     RowBox[{"n_", ",", " ", "d_", ",", " ", "e_"}], "]"}], " ", ":=", " ", 
+     RowBox[{"n_", ",", " ", "s_", ",", " ", "esum_", ",", " ", "emax_"}], 
+     "]"}], " ", ":=", " ", 
     RowBox[{"Module", "[", "\n", "  ", 
      RowBox[{
       RowBox[{"{", 
        RowBox[{
-       "s", ",", " ", "m", ",", " ", "l", ",", " ", "valid", ",", " ", 
-        "step3Condition", ",", " ", "sumDegreesEven"}], "}"}], ",", "\n", 
-      "  ", "\n", "  ", 
+       "m", ",", " ", "cond1", ",", " ", "cond2", ",", " ", "cond3", ",", " ",
+         "cond4", ",", " ", "criteria"}], "}"}], ",", "\n", "  ", "\n", "  ", 
       RowBox[{"(*", " ", 
        RowBox[{
         RowBox[{"Step", " ", "1"}], ":", " ", 
-        RowBox[{
-        "Compute", " ", "s", " ", "and", " ", "set", " ", "initial", " ", 
-         "m"}]}], " ", "*)"}], "\n", "  ", 
+        RowBox[{"Set", " ", "initial", " ", "m", " ", 
+         RowBox[{"(", 
+          RowBox[{"Conditions", " ", "1", " ", "and", " ", "3"}], ")"}]}]}], 
+       " ", "*)"}], "\n", "  ", 
       RowBox[{
-       RowBox[{"s", " ", "=", " ", 
-        RowBox[{"Sum", "[", 
-         RowBox[{
-          RowBox[{"d", " ", "-", " ", "k"}], ",", " ", 
-          RowBox[{"{", 
-           RowBox[{"k", ",", " ", "1", ",", " ", "n"}], "}"}]}], "]"}]}], ";",
-        " ", 
-       RowBox[{"(*", " ", 
-        RowBox[{"Missing", " ", "connections", " ", "sum"}], " ", "*)"}], 
-       "\n", "  ", 
        RowBox[{"m", " ", "=", " ", 
         RowBox[{"Max", "[", 
          RowBox[{
           RowBox[{"Ceiling", "[", 
-           RowBox[{"s", "/", "d"}], "]"}], ",", " ", "e"}], "]"}]}], ";", 
-       "  ", 
+           RowBox[{"esum", "/", "s"}], "]"}], ",", " ", "emax"}], "]"}]}], 
+       ";", "\n", "  ", "\n", "  ", 
        RowBox[{"(*", " ", 
-        RowBox[{"Lower", " ", "bound", " ", "on", " ", "m"}], " ", "*)"}], 
-       "\n", "  ", 
-       RowBox[{"l", " ", "=", " ", "0"}], ";", "  ", 
-       RowBox[{"(*", " ", 
+        RowBox[{"Define", " ", "the", " ", "four", " ", "conditions"}], " ", 
+        "*)"}], "\n", "  ", 
+       RowBox[{"cond1", " ", ":=", " ", 
         RowBox[{
-         RowBox[{"Start", " ", "with", " ", "no", " ", "self"}], "-", 
-         "loops"}], " ", "*)"}], "\n", "  ", "\n", "  ", 
-       RowBox[{"(*", " ", 
+         RowBox[{"m", "*", "s"}], " ", ">=", " ", "esum"}]}], ";", "\n", "  ", 
+       RowBox[{"cond2", " ", ":=", " ", 
         RowBox[{
-         RowBox[{"Step", " ", "2"}], ":", " ", 
          RowBox[{
-         "Adjust", " ", "parity", " ", "condition", " ", "for", " ", "sum", 
-          " ", "of", " ", "degrees"}]}], " ", "*)"}], "\n", "  ", 
-       RowBox[{"sumDegreesEven", " ", "=", " ", 
+          RowBox[{"m", "^", "2"}], " ", "-", " ", 
+          RowBox[{
+           RowBox[{"(", 
+            RowBox[{"s", " ", "+", " ", "1"}], ")"}], "*", "m"}], " ", "+", 
+          " ", "esum"}], " ", ">=", " ", "0"}]}], ";", "\n", "  ", 
+       RowBox[{"cond3", " ", ":=", " ", 
+        RowBox[{"m", " ", ">=", " ", "emax"}]}], ";", "\n", "  ", 
+       RowBox[{"cond4", " ", ":=", " ", 
         RowBox[{
          RowBox[{"Mod", "[", 
           RowBox[{
            RowBox[{
-            RowBox[{
-             RowBox[{"(", 
-              RowBox[{"m", " ", "+", " ", "n"}], ")"}], " ", "d"}], " ", "+", 
-            " ", "l"}], ",", " ", "2"}], "]"}], " ", "==", " ", "0"}]}], ";", 
-       "\n", "  ", 
-       RowBox[{"If", "[", 
+            RowBox[{"(", 
+             RowBox[{"m", " ", "+", " ", "n"}], ")"}], "*", "s"}], ",", " ", 
+           "2"}], "]"}], " ", "==", " ", "0"}]}], ";", "\n", "  ", "\n", "  ", 
+       RowBox[{"criteria", " ", ":=", " ", 
         RowBox[{
-         RowBox[{"!", "sumDegreesEven"}], ",", " ", 
-         RowBox[{"l", " ", "=", " ", "1"}]}], "]"}], ";", " ", 
+        "cond1", " ", "&&", " ", "cond2", " ", "&&", " ", "cond3", " ", "&&", 
+         " ", "cond4"}]}], ";", "\n", "  ", "\n", "  ", 
        RowBox[{"(*", " ", 
         RowBox[{
-         RowBox[{"Ensure", " ", 
-          RowBox[{"(", 
-           RowBox[{"m", "+", "n"}], ")"}], "d"}], " ", "+", " ", 
-         RowBox[{"l", " ", "is", " ", "even"}]}], " ", "*)"}], "\n", "\n", 
-       "  ", 
-       RowBox[{"(*", " ", 
-        RowBox[{
-         RowBox[{"Step", " ", "3"}], ":", " ", 
-         RowBox[{
-          RowBox[{"Check", " ", "intra"}], "-", 
-          RowBox[{"link", " ", "condition"}]}]}], " ", "*)"}], "\n", "  ", 
-       RowBox[{"step3Condition", " ", ":=", " ", 
-        RowBox[{
-         RowBox[{
-          RowBox[{"m", " ", 
-           RowBox[{"(", 
-            RowBox[{"m", " ", "-", " ", "1"}], ")"}]}], " ", "+", " ", "l"}], 
-         " ", ">=", " ", 
-         RowBox[{
-          RowBox[{"m", " ", "d"}], " ", "-", " ", "s"}]}]}], ";", "\n", "\n", 
-       "  ", 
-       RowBox[{"(*", " ", 
-        RowBox[{
-         RowBox[{
-         "Adjust", " ", "l", " ", "until", " ", "condition", " ", "is", " ", 
-          "met", " ", "or", " ", "l"}], " ", "=", " ", "m"}], " ", "*)"}], 
-       "\n", "  ", 
-       RowBox[{"While", "[", 
-        RowBox[{
-         RowBox[{
-          RowBox[{"!", "step3Condition"}], " ", "&&", " ", 
-          RowBox[{"l", " ", "<", " ", "m"}]}], ",", " ", 
-         RowBox[{"l", " ", "+=", " ", "2"}]}], "]"}], ";", "\n", "\n", "  ", 
-       RowBox[{"(*", " ", 
-        RowBox[{
-         RowBox[{
-          RowBox[{"Step", " ", "4"}], ":", " ", 
-          RowBox[{"If", " ", "condition", " ", "still", " ", "fails"}]}], ",",
-          " ", 
+         RowBox[{"While", " ", "the", " ", "criteria", " ", "fail"}], ",", 
+         " ", 
          RowBox[{"increment", " ", "m"}]}], " ", "*)"}], "\n", "  ", 
        RowBox[{"While", "[", 
         RowBox[{
-         RowBox[{"!", "step3Condition"}], ",", " ", "\n", "    ", 
-         RowBox[{
-          RowBox[{"m", " ", "+=", " ", "1"}], ";", "\n", "    ", 
-          RowBox[{"If", "[", 
-           RowBox[{
-            RowBox[{
-             RowBox[{"Mod", "[", 
-              RowBox[{
-               RowBox[{
-                RowBox[{
-                 RowBox[{"(", 
-                  RowBox[{"m", " ", "+", " ", "n"}], ")"}], " ", "d"}], " ", 
-                "+", " ", "l"}], ",", " ", "2"}], "]"}], " ", "!=", " ", 
-             "0"}], ",", " ", 
-            RowBox[{"l", " ", "=", " ", "1"}], ",", " ", 
-            RowBox[{"l", " ", "=", " ", "0"}]}], "]"}], ";", " ", 
-          RowBox[{"(*", " ", 
-           RowBox[{"Adjust", " ", "parity"}], " ", "*)"}], "\n", "    ", 
-          RowBox[{"While", "[", 
-           RowBox[{
-            RowBox[{
-             RowBox[{"!", "step3Condition"}], " ", "&&", " ", 
-             RowBox[{"l", " ", "<", " ", "m"}]}], ",", " ", 
-            RowBox[{"l", " ", "+=", " ", "2"}]}], "]"}], ";"}]}], "\n", "  ", 
-        "]"}], ";", "\n", "\n", "  ", 
+         RowBox[{"!", "criteria"}], ",", " ", 
+         RowBox[{"m", "++"}]}], "]"}], ";", "\n", "  ", "\n", "  ", 
        RowBox[{"(*", " ", 
-        RowBox[{"Final", " ", "output"}], " ", "*)"}], "\n", "  ", 
-       RowBox[{"valid", " ", "=", " ", "step3Condition"}], ";", "\n", "  ", 
-       RowBox[{"{", 
-        RowBox[{"m", ",", " ", "l", ",", " ", "s", ",", " ", "valid"}], 
-        "}"}]}]}], "\n", "]"}]}], "\n", "\n", 
+        RowBox[{
+        "Return", " ", "the", " ", "minimal", " ", "m", " ", "that", " ", 
+         "satisfies", " ", "all", " ", "conditions"}], " ", "*)"}], "\n", 
+       "  ", 
+       RowBox[{"{", "m", "}"}]}]}], "\n", "]"}]}], "\n", "\n", 
    RowBox[{"(*", " ", 
-    RowBox[{"Example", " ", "usage"}], " ", "*)"}], "\n", 
+    RowBox[{"Example", " ", "usage", " ", "1"}], " ", "*)"}], "\n", 
+   RowBox[{
+    RowBox[{"nrNodes", " ", "=", " ", "50"}], ";"}], "\n", 
+   RowBox[{
+    RowBox[{"sparsity", " ", "=", " ", 
+     RowBox[{"nrNodes", " ", "-", " ", "2"}]}], ";"}], "\n", 
+   RowBox[{
+    RowBox[{"maxe", " ", "=", " ", "sparsity"}], ";"}], "\n", 
+   RowBox[{
+    RowBox[{"totale", " ", "=", " ", "maxe"}], ";"}], "\n", 
    RowBox[{"simulateConditions", "[", 
-    RowBox[{"10", ",", " ", "5", ",", " ", "3"}], "]"}], "\n"}]}]], "Code",
+    RowBox[{
+    "nrNodes", ",", " ", "sparsity", ",", " ", "totale", ",", " ", "maxe"}], 
+    "]"}], "\n", "\n", 
+   RowBox[{"(*", " ", 
+    RowBox[{"Example", " ", "usage", " ", "2"}], " ", "*)"}], "\n", 
+   RowBox[{
+    RowBox[{"nrNodes", " ", "=", " ", "50"}], ";"}], "\n", 
+   RowBox[{
+    RowBox[{"sparsity", " ", "=", " ", 
+     RowBox[{"nrNodes", " ", "-", " ", "1"}]}], ";"}], "\n", 
+   RowBox[{
+    RowBox[{"maxe", " ", "=", " ", 
+     RowBox[{"sparsity", " ", "-", " ", "1"}]}], ";"}], "\n", 
+   RowBox[{
+    RowBox[{"totale", " ", "=", " ", 
+     RowBox[{"maxe", "*", 
+      RowBox[{"(", 
+       RowBox[{"nrNodes", " ", "-", " ", "1"}], ")"}]}]}], ";"}], "\n", 
+   RowBox[{"simulateConditions", "[", 
+    RowBox[{
+    "nrNodes", ",", " ", "sparsity", ",", " ", "totale", ",", " ", "maxe"}], 
+    "]"}]}]}]], "Code",
  CellChangeTimes->{
-  3.949054265636917*^9, {3.9490543519961033`*^9, 3.949054385849884*^9}},
- CellLabel->"In[4]:=",ExpressionUUID->"26d4e0b3-c026-0049-9627-09ba95adce62"],
+  3.949054265636917*^9, {3.9490543519961033`*^9, 3.949054385849884*^9}, {
+   3.969874599029604*^9, 3.969874645145363*^9}, {3.9698747580519905`*^9, 
+   3.9698747710335827`*^9}, {3.969875822764038*^9, 3.969875986633198*^9}, {
+   3.969876051032673*^9, 3.9698760575492535`*^9}, {3.969876145081934*^9, 
+   3.9698761664879017`*^9}, {3.9698762087193375`*^9, 3.969876370659216*^9}, {
+   3.9698764037907867`*^9, 3.969876692644783*^9}, {3.9698768660156136`*^9, 
+   3.969876884548298*^9}, {3.969876930449419*^9, 3.9698769505795174`*^9}, {
+   3.9698771182454376`*^9, 3.969877226179619*^9}, 3.969881040871664*^9, {
+   3.969881162859108*^9, 3.969881167389202*^9}, {3.96988133442408*^9, 
+   3.9698813376790543`*^9}},
+ CellLabel->"In[1]:=",ExpressionUUID->"26d4e0b3-c026-0049-9627-09ba95adce62"],
 
 Cell[BoxData[
- RowBox[{"{", 
-  RowBox[{"6", ",", "6", ",", 
-   RowBox[{"-", "5"}], ",", "True"}], "}"}]], "Output",
- CellChangeTimes->{
-  3.949054279982828*^9, {3.949054388621784*^9, 3.9490543969524136`*^9}, 
-   3.949141665504608*^9, 3.969869323177498*^9},
- CellLabel->"Out[5]=",ExpressionUUID->"169c2930-aa1e-2248-aad5-b60fa7655c59"]
+ RowBox[{"{", "48", "}"}]], "Output",
+ CellChangeTimes->{{3.9698769341993465`*^9, 3.969876953094681*^9}, 
+   3.9698769954291973`*^9, {3.9698772078338223`*^9, 3.969877223446249*^9}, 
+   3.969877501044447*^9, 3.969878160299244*^9, 3.9698793922658825`*^9, 
+   3.969881168635*^9, 3.9698813389052963`*^9, 3.9698846211690884`*^9},
+ CellLabel->"Out[6]=",ExpressionUUID->"c1d00eb8-7a26-ca46-bc20-7169fbab39ac"],
+
+Cell[BoxData[
+ RowBox[{"{", "48", "}"}]], "Output",
+ CellChangeTimes->{{3.9698769341993465`*^9, 3.969876953094681*^9}, 
+   3.9698769954291973`*^9, {3.9698772078338223`*^9, 3.969877223446249*^9}, 
+   3.969877501044447*^9, 3.969878160299244*^9, 3.9698793922658825`*^9, 
+   3.969881168635*^9, 3.9698813389052963`*^9, 3.969884621174263*^9},
+ CellLabel->"Out[11]=",ExpressionUUID->"9c9eb423-b95e-4a40-813d-00be90d85e08"]
 }, Open  ]]
+}, Open  ]],
+
+Cell[CellGroupData[{
+
+Cell["Bound surface on m, given N and s.", "Section",
+ CellChangeTimes->{{3.9698815889812145`*^9, 
+  3.9698816100490246`*^9}},ExpressionUUID->"02b02b72-0bf7-874b-93e6-\
+aa7c167bb8dd"],
+
+Cell[CellGroupData[{
+
+Cell[BoxData[
+ RowBox[{
+  RowBox[{"(*", " ", 
+   RowBox[{
+   "Visualization", " ", "with", " ", "two", " ", "fixed", " ", "points"}], 
+   " ", "*)"}], "\n", 
+  RowBox[{"Manipulate", "[", "\n", " ", 
+   RowBox[{
+    RowBox[{"Module", "[", 
+     RowBox[{
+      RowBox[{"{", 
+       RowBox[{"data", ",", " ", 
+        RowBox[{"esumMax", " ", "=", " ", 
+         RowBox[{"s", "*", 
+          RowBox[{"(", 
+           RowBox[{"n", " ", "-", " ", "1"}], ")"}]}]}], ",", " ", "point1", 
+        ",", " ", "point2"}], "}"}], ",", "\n", "  ", "\n", "  ", 
+      RowBox[{"(*", " ", 
+       RowBox[{"Surface", " ", "data"}], " ", "*)"}], "\n", "  ", 
+      RowBox[{
+       RowBox[{"data", " ", "=", " ", 
+        RowBox[{"Flatten", "[", "\n", "    ", 
+         RowBox[{
+          RowBox[{"Table", "[", "\n", "     ", 
+           RowBox[{
+            RowBox[{"{", 
+             RowBox[{"emaxVal", ",", " ", "esumVal", ",", " ", 
+              RowBox[{
+               RowBox[{"simulateConditions", "[", 
+                RowBox[{
+                "n", ",", " ", "s", ",", " ", "esumVal", ",", " ", 
+                 "emaxVal"}], "]"}], "[", 
+               RowBox[{"[", "1", "]"}], "]"}]}], "}"}], ",", "\n", "     ", 
+            RowBox[{"{", 
+             RowBox[{"emaxVal", ",", " ", "1", ",", " ", "s", ",", " ", "2"}],
+              "}"}], ",", "\n", "     ", 
+            RowBox[{"{", 
+             RowBox[{"esumVal", ",", " ", "1", ",", " ", "esumMax", ",", " ", 
+              RowBox[{"Floor", "[", 
+               RowBox[{"esumMax", "/", "30"}], "]"}]}], "}"}]}], "\n", "    ",
+            "]"}], ",", "\n", "    ", "1"}], "\n", "  ", "]"}]}], ";", "\n", 
+       "  ", "\n", "  ", 
+       RowBox[{"(*", " ", 
+        RowBox[{"Define", " ", "fixed", " ", "point"}], " ", "*)"}], "\n", 
+       "  ", 
+       RowBox[{"point1", " ", "=", " ", 
+        RowBox[{"{", 
+         RowBox[{"emax1", ",", " ", "esum1", ",", " ", 
+          RowBox[{
+           RowBox[{"simulateConditions", "[", 
+            RowBox[{
+            "n", ",", " ", "s", ",", " ", "esum1", ",", " ", "emax1"}], "]"}],
+            "[", 
+           RowBox[{"[", "1", "]"}], "]"}]}], "}"}]}], ";", "\n", "  ", "\n", 
+       "  ", 
+       RowBox[{"(*", " ", 
+        RowBox[{"Plot", " ", "surface", " ", "and", " ", "points"}], " ", 
+        "*)"}], "\n", "  ", 
+       RowBox[{"Show", "[", "\n", "   ", 
+        RowBox[{
+         RowBox[{"ListPlot3D", "[", "\n", "    ", 
+          RowBox[{"data", ",", "\n", "    ", 
+           RowBox[{"AxesLabel", " ", "->", " ", 
+            RowBox[{"{", "\n", "      ", 
+             RowBox[{
+              RowBox[{"Style", "[", 
+               RowBox[{
+               "\"\<Maximum deficiency (e_max)\>\"", ",", " ", "12", ",", " ",
+                 "Black"}], "]"}], ",", "\n", "      ", 
+              RowBox[{"Style", "[", 
+               RowBox[{
+               "\"\<Total deficiency (e_sum)\>\"", ",", " ", "12", ",", " ", 
+                "Black"}], "]"}], ",", "\n", "      ", 
+              RowBox[{"Style", "[", 
+               RowBox[{
+               "\"\<Number of auxiliary nodes (M)\>\"", ",", " ", "12", ",", 
+                " ", "Black"}], "]"}]}], "\n", "    ", "}"}]}], ",", "\n", 
+           "    ", 
+           RowBox[{"TicksStyle", " ", "->", " ", 
+            RowBox[{"Directive", "[", 
+             RowBox[{"10", ",", " ", "Black"}], "]"}]}], ",", "\n", "    ", 
+           RowBox[{"LabelStyle", " ", "->", " ", 
+            RowBox[{"Directive", "[", 
+             RowBox[{"10", ",", " ", "Black"}], "]"}]}], ",", "\n", "    ", 
+           RowBox[{"ColorFunction", " ", "->", " ", "\"\<Rainbow\>\""}], ",", 
+           "\n", "    ", 
+           RowBox[{"Mesh", " ", "->", " ", "None"}], ",", "\n", "    ", 
+           RowBox[{"PlotRange", " ", "->", " ", "All"}], ",", "\n", "    ", 
+           RowBox[{"Boxed", " ", "->", " ", "True"}]}], "\n", "    ", 
+          RowBox[{"(*", " ", 
+           RowBox[{"PlotLabel", " ", "->", " ", 
+            RowBox[{"Row", "[", 
+             RowBox[{"{", 
+              RowBox[{
+              "\"\<Minimal auxiliary nodes M for N = \>\"", ",", " ", "n", 
+               ",", " ", "\"\<, s = \>\"", ",", " ", "s"}], "}"}], "]"}]}], 
+           " ", "*)"}], "\n", "   ", "]"}], ",", "\n", "   ", 
+         RowBox[{"Graphics3D", "[", 
+          RowBox[{"{", "\n", "\t  ", 
+           RowBox[{"{", 
+            RowBox[{"Black", ",", " ", 
+             RowBox[{"PointSize", "[", "0.04", "]"}], ",", " ", 
+             RowBox[{"Point", "[", "point1", "]"}]}], "\n", "\t  ", "}"}], 
+           "\n", "\t", "}"}], "]"}]}], "\n", "  ", "]"}]}]}], "\n", " ", 
+     "]"}], ",", "\n", " ", 
+    RowBox[{"{", 
+     RowBox[{
+      RowBox[{"{", 
+       RowBox[{
+       "n", ",", " ", "50", ",", " ", 
+        "\"\<Number of original nodes (N)\>\""}], "}"}], ",", " ", "5", ",", 
+      " ", "100", ",", " ", "1"}], "}"}], ",", "\n", " ", 
+    RowBox[{"{", 
+     RowBox[{
+      RowBox[{"{", 
+       RowBox[{
+       "s", ",", " ", "48", ",", " ", "\"\<Regularity degree (s)\>\""}], 
+       "}"}], ",", " ", "1", ",", " ", "100", ",", " ", "1"}], "}"}], ",", 
+    "\n", " ", 
+    RowBox[{"(*", " ", 
+     RowBox[{
+     "Manual", " ", "input", " ", "fields", " ", "for", " ", "the", " ", 
+      "two", " ", "points"}], " ", "*)"}], "\n", " ", 
+    RowBox[{"{", 
+     RowBox[{
+      RowBox[{"{", 
+       RowBox[{
+       "esum1", ",", " ", "48", ",", " ", 
+        "\"\<Total deficiency (e_sum)\>\""}], "}"}], ",", " ", "InputField"}],
+      "}"}], ",", "\n", " ", 
+    RowBox[{"{", 
+     RowBox[{
+      RowBox[{"{", 
+       RowBox[{
+       "emax1", ",", " ", "48", ",", " ", 
+        "\"\<Maximum deficiency (e_max)\>\""}], "}"}], ",", " ", 
+      "InputField"}], "}"}]}], "\n", "]"}]}]], "Code",
+ CellChangeTimes->{
+  3.969881107084301*^9, 3.9698812292878017`*^9, 3.9698814207522507`*^9, {
+   3.969881452266247*^9, 3.9698814916413193`*^9}, {3.9698816329098396`*^9, 
+   3.969881633540457*^9}, {3.9698816698291416`*^9, 3.9698816703790264`*^9}, {
+   3.969881732772135*^9, 3.9698817357156105`*^9}, 3.9698818483564377`*^9, {
+   3.9698820414092007`*^9, 3.969882062053673*^9}, {3.969882131079199*^9, 
+   3.9698821314291744`*^9}, {3.9698821805607166`*^9, 
+   3.9698822051768513`*^9}, {3.969882283909153*^9, 3.9698823142004337`*^9}, {
+   3.969882642509077*^9, 3.969882653629778*^9}, {3.9698826876092224`*^9, 
+   3.96988269437953*^9}, {3.969882909189827*^9, 3.969882953959751*^9}, {
+   3.969882994372732*^9, 3.9698829987351017`*^9}, {3.969883093159397*^9, 
+   3.9698831450233307`*^9}, {3.969883188404873*^9, 3.969883300422535*^9}, {
+   3.969883354939245*^9, 3.969883378039177*^9}, {3.9698834319035378`*^9, 
+   3.9698834557194824`*^9}, {3.96988354810071*^9, 3.969883618416397*^9}},
+ CellLabel->"In[13]:=",ExpressionUUID->"1a55244e-f948-2b4a-8030-627efafef1af"],
+
+Cell[BoxData[
+ TagBox[
+  StyleBox[
+   DynamicModuleBox[{$CellContext`emax1$$ = 49, $CellContext`esum1$$ = 
+    2352, $CellContext`n$$ = 50, $CellContext`s$$ = 49, Typeset`show$$ = True,
+     Typeset`bookmarkList$$ = {}, Typeset`bookmarkMode$$ = "Menu", 
+    Typeset`animator$$, Typeset`animvar$$ = 1, Typeset`name$$ = 
+    "\"untitled\"", Typeset`specs$$ = {{{
+       Hold[$CellContext`n$$], 50, "Number of original nodes (N)"}, 5, 100, 1,
+       ControlType -> Manipulator}, {{
+       Hold[$CellContext`s$$], 48, "Regularity degree (s)"}, 1, 100, 1, 
+      ControlType -> Manipulator}, {{
+       Hold[$CellContext`esum1$$], 48, "Total deficiency (e_sum)"}, 
+      ControlType -> InputField}, {{
+       Hold[$CellContext`emax1$$], 48, "Maximum deficiency (e_max)"}, 
+      ControlType -> InputField}}, Typeset`size$$ = {
+    483.3750000000012, {161.60591622792214`, 166.76465658844478`}}, 
+    Typeset`update$$ = 0, Typeset`initDone$$, Typeset`skipInitDone$$ = True, 
+    Typeset`keyframeActionsQ$$ = False, Typeset`keyframeList$$ = {}}, 
+    DynamicBox[Manipulate`ManipulateBoxes[
+     1, StandardForm, 
+      "Variables" :> {$CellContext`emax1$$ = 48, $CellContext`esum1$$ = 
+        48, $CellContext`n$$ = 50, $CellContext`s$$ = 48}, 
+      "ControllerVariables" :> {}, 
+      "OtherVariables" :> {
+       Typeset`show$$, Typeset`bookmarkList$$, Typeset`bookmarkMode$$, 
+        Typeset`animator$$, Typeset`animvar$$, Typeset`name$$, 
+        Typeset`specs$$, Typeset`size$$, Typeset`update$$, Typeset`initDone$$,
+         Typeset`skipInitDone$$, Typeset`keyframeActionsQ$$, 
+        Typeset`keyframeList$$}, "Body" :> 
+      Module[{$CellContext`data$, $CellContext`esumMax$ = $CellContext`s$$ \
+($CellContext`n$$ - 
+           1), $CellContext`point1$, $CellContext`point2$}, \
+$CellContext`data$ = Flatten[
+           Table[{$CellContext`emaxVal, $CellContext`esumVal, 
+             Part[
+              $CellContext`simulateConditions[$CellContext`n$$, \
+$CellContext`s$$, $CellContext`esumVal, $CellContext`emaxVal], 
+              1]}, {$CellContext`emaxVal, 1, $CellContext`s$$, 
+             2}, {$CellContext`esumVal, 1, $CellContext`esumMax$, 
+             Floor[$CellContext`esumMax$/30]}], 
+           1]; $CellContext`point1$ = {$CellContext`emax1$$, \
+$CellContext`esum1$$, 
+           Part[
+            $CellContext`simulateConditions[$CellContext`n$$, \
+$CellContext`s$$, $CellContext`esum1$$, $CellContext`emax1$$], 1]}; Show[
+          ListPlot3D[$CellContext`data$, AxesLabel -> {
+             Style["Maximum deficiency (e_max)", 12, Black], 
+             Style["Total deficiency (e_sum)", 12, Black], 
+             Style["Number of auxiliary nodes (M)", 12, Black]}, TicksStyle -> 
+           Directive[10, Black], LabelStyle -> Directive[10, Black], 
+           ColorFunction -> "Rainbow", Mesh -> None, PlotRange -> All, Boxed -> 
+           True], 
+          Graphics3D[{{Black, 
+             PointSize[0.04], 
+             Point[$CellContext`point1$]}}]]], 
+      "Specifications" :> {{{$CellContext`n$$, 50, 
+          "Number of original nodes (N)"}, 5, 100, 
+         1}, {{$CellContext`s$$, 48, "Regularity degree (s)"}, 1, 100, 
+         1}, {{$CellContext`esum1$$, 48, "Total deficiency (e_sum)"}, 
+         ControlType -> 
+         InputField}, {{$CellContext`emax1$$, 48, 
+          "Maximum deficiency (e_max)"}, ControlType -> InputField}}, 
+      "Options" :> {}, "DefaultOptions" :> {}],
+     ImageSizeCache->{
+      811.5258069629085, {186.69567208729714`, 191.85441244781978`}},
+     SingleEvaluation->True],
+    Deinitialization:>None,
+    DynamicModuleValues:>{},
+    SynchronousInitialization->True,
+    UndoTrackedVariables:>{Typeset`show$$, Typeset`bookmarkMode$$},
+    UnsavedVariables:>{Typeset`initDone$$},
+    UntrackedVariables:>{Typeset`size$$}], "Manipulate",
+   Deployed->True,
+   StripOnInput->False],
+  Manipulate`InterpretManipulate[1]]], "Output",
+ CellChangeTimes->{
+  3.969881182442892*^9, {3.969881231858856*^9, 3.9698812513350906`*^9}, {
+   3.969881659575844*^9, 3.9698816716113186`*^9}, 3.9698817366042557`*^9, 
+   3.969881850282469*^9, {3.969882064895855*^9, 3.9698820676931725`*^9}, 
+   3.9698821335710926`*^9, 3.9698821636967545`*^9, {3.969882202139103*^9, 
+   3.969882206278843*^9}, {3.9698822494228745`*^9, 3.9698822519367695`*^9}, {
+   3.9698823153390045`*^9, 3.969882333221325*^9}, 3.969882655664894*^9, {
+   3.9698826895040092`*^9, 3.969882695853359*^9}, 3.969883012752123*^9, {
+   3.969883194733135*^9, 3.9698832379813423`*^9}, {3.9698834154344025`*^9, 
+   3.969883442694479*^9}, {3.969883523550596*^9, 3.969883619799225*^9}, {
+   3.9698846086491737`*^9, 3.9698846287513504`*^9}},
+ CellLabel->"Out[13]=",ExpressionUUID->"4b757b77-8c74-cd4a-b5c4-c1e27f1f6fc0"]
 }, Open  ]]
 }, Open  ]]
 }, Open  ]]
 },
-WindowSize->{1070.25, 602.625},
+WindowSize->{1070.25, 597.75},
 WindowMargins->{{0, Automatic}, {Automatic, 0}},
-Magnification:>1. Inherited,
+Magnification:>0.9 Inherited,
 FrontEndVersion->"14.1 for Microsoft Windows (64-bit) (July 16, 2024)",
 StyleDefinitions->"Default.nb",
 ExpressionUUID->"b10cfb5f-bb41-e140-ba55-31c11f6ef433"
@@ -455,21 +451,20 @@ CellTagsIndex->{}
 (*NotebookFileOutline
 Notebook[{
 Cell[CellGroupData[{
-Cell[576, 22, 426, 12, 101, "Title",ExpressionUUID->"e7f5290d-210a-664d-a015-de7ee07ec8a4"],
-Cell[1005, 36, 249, 4, 52, "Subtitle",ExpressionUUID->"ce37bcdc-7aab-0a4c-aaf7-1a399344fbc2"],
+Cell[576, 22, 218, 3, 86, "Title",ExpressionUUID->"e7f5290d-210a-664d-a015-de7ee07ec8a4"],
 Cell[CellGroupData[{
-Cell[1279, 44, 472, 13, 66, "Section",ExpressionUUID->"febdb636-8a6c-824e-8b57-b480d68ffa96"],
-Cell[1754, 59, 1158, 28, 56, "Text",ExpressionUUID->"cd1bf4d0-eff8-d548-bae4-023f8c8a6e22"],
+Cell[819, 29, 363, 10, 59, "Section",ExpressionUUID->"3ec6e693-ea45-584f-8509-38365f24f368"],
 Cell[CellGroupData[{
-Cell[2937, 91, 5005, 118, 401, "Code",ExpressionUUID->"01708ccd-1eb7-9649-9f2e-8d4bd6f1c624"],
-Cell[7945, 211, 2309, 43, 429, "Output",ExpressionUUID->"23832327-f52d-d041-b190-0fc2add4a7c1"]
+Cell[1207, 43, 4996, 117, 582, "Code",ExpressionUUID->"26d4e0b3-c026-0049-9627-09ba95adce62"],
+Cell[6206, 162, 416, 6, 28, "Output",ExpressionUUID->"c1d00eb8-7a26-ca46-bc20-7169fbab39ac"],
+Cell[6625, 170, 415, 6, 28, "Output",ExpressionUUID->"9c9eb423-b95e-4a40-813d-00be90d85e08"]
+}, Open  ]]
 }, Open  ]],
 Cell[CellGroupData[{
-Cell[10291, 259, 456, 13, 53, "Subsection",ExpressionUUID->"3ec6e693-ea45-584f-8509-38365f24f368"],
+Cell[7089, 182, 183, 3, 59, "Section",ExpressionUUID->"02b02b72-0bf7-874b-93e6-aa7c167bb8dd"],
 Cell[CellGroupData[{
-Cell[10772, 276, 5907, 147, 629, "Code",ExpressionUUID->"26d4e0b3-c026-0049-9627-09ba95adce62"],
-Cell[16682, 425, 334, 7, 32, "Output",ExpressionUUID->"169c2930-aa1e-2248-aad5-b60fa7655c59"]
-}, Open  ]]
+Cell[7297, 189, 6785, 151, 756, "Code",ExpressionUUID->"1a55244e-f948-2b4a-8030-627efafef1af"],
+Cell[14085, 342, 4730, 87, 393, "Output",ExpressionUUID->"4b757b77-8c74-cd4a-b5c4-c1e27f1f6fc0"]
 }, Open  ]]
 }, Open  ]]
 }, Open  ]]
