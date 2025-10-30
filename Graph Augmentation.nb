@@ -10,10 +10,10 @@
 NotebookFileLineBreakTest
 NotebookFileLineBreakTest
 NotebookDataPosition[       154,          7]
-NotebookDataLength[     20073,        466]
-NotebookOptionsPosition[     18855,        434]
-NotebookOutlinePosition[     19288,        451]
-CellTagsIndexPosition[     19245,        448]
+NotebookDataLength[     20926,        486]
+NotebookOptionsPosition[     19708,        454]
+NotebookOutlinePosition[     20141,        471]
+CellTagsIndexPosition[     20098,        468]
 WindowFrame->Normal*)
 
 (* Beginning of Notebook Content *)
@@ -158,23 +158,25 @@ Cell[BoxData[
    3.9698771182454376`*^9, 3.969877226179619*^9}, 3.969881040871664*^9, {
    3.969881162859108*^9, 3.969881167389202*^9}, {3.96988133442408*^9, 
    3.9698813376790543`*^9}},
- CellLabel->"In[1]:=",ExpressionUUID->"26d4e0b3-c026-0049-9627-09ba95adce62"],
+ CellLabel->"In[15]:=",ExpressionUUID->"26d4e0b3-c026-0049-9627-09ba95adce62"],
 
 Cell[BoxData[
  RowBox[{"{", "48", "}"}]], "Output",
  CellChangeTimes->{{3.9698769341993465`*^9, 3.969876953094681*^9}, 
    3.9698769954291973`*^9, {3.9698772078338223`*^9, 3.969877223446249*^9}, 
    3.969877501044447*^9, 3.969878160299244*^9, 3.9698793922658825`*^9, 
-   3.969881168635*^9, 3.9698813389052963`*^9, 3.9698846211690884`*^9},
- CellLabel->"Out[6]=",ExpressionUUID->"c1d00eb8-7a26-ca46-bc20-7169fbab39ac"],
+   3.969881168635*^9, 3.9698813389052963`*^9, 3.9698846211690884`*^9, 
+   3.9708420918004646`*^9, 3.9708427418039303`*^9, 3.970842927566004*^9},
+ CellLabel->"Out[20]=",ExpressionUUID->"345c6fe9-c0be-5440-aefa-072a8bfc5dbb"],
 
 Cell[BoxData[
  RowBox[{"{", "48", "}"}]], "Output",
  CellChangeTimes->{{3.9698769341993465`*^9, 3.969876953094681*^9}, 
    3.9698769954291973`*^9, {3.9698772078338223`*^9, 3.969877223446249*^9}, 
    3.969877501044447*^9, 3.969878160299244*^9, 3.9698793922658825`*^9, 
-   3.969881168635*^9, 3.9698813389052963`*^9, 3.969884621174263*^9},
- CellLabel->"Out[11]=",ExpressionUUID->"9c9eb423-b95e-4a40-813d-00be90d85e08"]
+   3.969881168635*^9, 3.9698813389052963`*^9, 3.9698846211690884`*^9, 
+   3.9708420918004646`*^9, 3.9708427418039303`*^9, 3.97084292757041*^9},
+ CellLabel->"Out[25]=",ExpressionUUID->"7538bc9c-a12e-5646-8f82-c4c201861a3c"]
 }, Open  ]]
 }, Open  ]],
 
@@ -254,12 +256,22 @@ Cell[BoxData[
              RowBox[{
               RowBox[{"Style", "[", 
                RowBox[{
-               "\"\<Maximum deficiency (e_max)\>\"", ",", " ", "12", ",", " ",
-                 "Black"}], "]"}], ",", "\n", "      ", 
+                RowBox[{"Row", "[", 
+                 RowBox[{"{", 
+                  RowBox[{"\"\<Maximum deficiency (\>\"", ",", " ", 
+                   RowBox[{"Subscript", "[", 
+                    RowBox[{"\"\<e\>\"", ",", " ", "\"\<max\>\""}], "]"}], 
+                   ",", " ", "\"\<)\>\""}], "}"}], "]"}], ",", " ", "12", ",",
+                 " ", "Black"}], "]"}], ",", "\n", "      ", 
               RowBox[{"Style", "[", 
                RowBox[{
-               "\"\<Total deficiency (e_sum)\>\"", ",", " ", "12", ",", " ", 
-                "Black"}], "]"}], ",", "\n", "      ", 
+                RowBox[{"Row", "[", 
+                 RowBox[{"{", 
+                  RowBox[{"\"\<Total deficiency (\>\"", ",", " ", 
+                   RowBox[{"Subscript", "[", 
+                    RowBox[{"\"\<e\>\"", ",", " ", "\"\<sum\>\""}], "]"}], 
+                   ",", " ", "\"\<)\>\""}], "}"}], "]"}], ",", " ", "12", ",",
+                 " ", "Black"}], "]"}], ",", "\n", "      ", 
               RowBox[{"Style", "[", 
                RowBox[{
                "\"\<Number of auxiliary nodes (M)\>\"", ",", " ", "12", ",", 
@@ -275,23 +287,18 @@ Cell[BoxData[
            "\n", "    ", 
            RowBox[{"Mesh", " ", "->", " ", "None"}], ",", "\n", "    ", 
            RowBox[{"PlotRange", " ", "->", " ", "All"}], ",", "\n", "    ", 
-           RowBox[{"Boxed", " ", "->", " ", "True"}]}], "\n", "    ", 
-          RowBox[{"(*", " ", 
-           RowBox[{"PlotLabel", " ", "->", " ", 
-            RowBox[{"Row", "[", 
-             RowBox[{"{", 
-              RowBox[{
-              "\"\<Minimal auxiliary nodes M for N = \>\"", ",", " ", "n", 
-               ",", " ", "\"\<, s = \>\"", ",", " ", "s"}], "}"}], "]"}]}], 
-           " ", "*)"}], "\n", "   ", "]"}], ",", "\n", "   ", 
+           RowBox[{"Boxed", " ", "->", " ", "True"}]}], "\n", "   ", "]"}], 
+         ",", "\n", "   ", 
          RowBox[{"Graphics3D", "[", 
-          RowBox[{"{", "\n", "\t  ", 
+          RowBox[{"{", "\n", "     ", 
            RowBox[{"{", 
             RowBox[{"Black", ",", " ", 
              RowBox[{"PointSize", "[", "0.04", "]"}], ",", " ", 
-             RowBox[{"Point", "[", "point1", "]"}]}], "\n", "\t  ", "}"}], 
-           "\n", "\t", "}"}], "]"}]}], "\n", "  ", "]"}]}]}], "\n", " ", 
-     "]"}], ",", "\n", " ", 
+             RowBox[{"Point", "[", "point1", "]"}]}], "}"}], "\n", "   ", 
+           "}"}], "]"}]}], "\n", "  ", "]"}]}]}], "\n", " ", "]"}], ",", "\n",
+     " ", 
+    RowBox[{"(*", " ", 
+     RowBox[{"Manipulate", " ", "controls"}], " ", "*)"}], "\n", " ", 
     RowBox[{"{", 
      RowBox[{
       RowBox[{"{", 
@@ -313,17 +320,25 @@ Cell[BoxData[
     RowBox[{"{", 
      RowBox[{
       RowBox[{"{", 
-       RowBox[{
-       "esum1", ",", " ", "48", ",", " ", 
-        "\"\<Total deficiency (e_sum)\>\""}], "}"}], ",", " ", "InputField"}],
-      "}"}], ",", "\n", " ", 
+       RowBox[{"esum1", ",", " ", "48", ",", " ", 
+        RowBox[{"Row", "[", 
+         RowBox[{"{", 
+          RowBox[{"\"\<Total deficiency (\>\"", ",", " ", 
+           RowBox[{"Subscript", "[", 
+            RowBox[{"\"\<e\>\"", ",", " ", "\"\<sum\>\""}], "]"}], ",", " ", 
+           "\"\<)\>\""}], "}"}], "]"}]}], "}"}], ",", " ", "InputField"}], 
+     "}"}], ",", "\n", " ", 
     RowBox[{"{", 
      RowBox[{
       RowBox[{"{", 
-       RowBox[{
-       "emax1", ",", " ", "48", ",", " ", 
-        "\"\<Maximum deficiency (e_max)\>\""}], "}"}], ",", " ", 
-      "InputField"}], "}"}]}], "\n", "]"}]}]], "Code",
+       RowBox[{"emax1", ",", " ", "48", ",", " ", 
+        RowBox[{"Row", "[", 
+         RowBox[{"{", 
+          RowBox[{"\"\<Maximum deficiency (\>\"", ",", " ", 
+           RowBox[{"Subscript", "[", 
+            RowBox[{"\"\<e\>\"", ",", " ", "\"\<max\>\""}], "]"}], ",", " ", 
+           "\"\<)\>\""}], "}"}], "]"}]}], "}"}], ",", " ", "InputField"}], 
+     "}"}]}], "\n", "]"}]}]], "Code",
  CellChangeTimes->{
   3.969881107084301*^9, 3.9698812292878017`*^9, 3.9698814207522507`*^9, {
    3.969881452266247*^9, 3.9698814916413193`*^9}, {3.9698816329098396`*^9, 
@@ -337,13 +352,17 @@ Cell[BoxData[
    3.969882994372732*^9, 3.9698829987351017`*^9}, {3.969883093159397*^9, 
    3.9698831450233307`*^9}, {3.969883188404873*^9, 3.969883300422535*^9}, {
    3.969883354939245*^9, 3.969883378039177*^9}, {3.9698834319035378`*^9, 
-   3.9698834557194824`*^9}, {3.96988354810071*^9, 3.969883618416397*^9}},
- CellLabel->"In[13]:=",ExpressionUUID->"1a55244e-f948-2b4a-8030-627efafef1af"],
+   3.9698834557194824`*^9}, {3.96988354810071*^9, 3.969883618416397*^9}, {
+   3.970842046586218*^9, 3.970842085285446*^9}, {3.9708421508410435`*^9, 
+   3.970842161587887*^9}, {3.970842912452442*^9, 3.9708429183906727`*^9}, {
+   3.970842951719099*^9, 3.9708430127214622`*^9}, {3.9708430974057407`*^9, 
+   3.970843165776394*^9}, {3.970843300932144*^9, 3.9708433098864727`*^9}},
+ CellLabel->"In[51]:=",ExpressionUUID->"1a55244e-f948-2b4a-8030-627efafef1af"],
 
 Cell[BoxData[
  TagBox[
   StyleBox[
-   DynamicModuleBox[{$CellContext`emax1$$ = 49, $CellContext`esum1$$ = 
+   DynamicModuleBox[{$CellContext`emax1$$ = 48, $CellContext`esum1$$ = 
     2352, $CellContext`n$$ = 50, $CellContext`s$$ = 49, Typeset`show$$ = True,
      Typeset`bookmarkList$$ = {}, Typeset`bookmarkMode$$ = "Menu", 
     Typeset`animator$$, Typeset`animvar$$ = 1, Typeset`name$$ = 
@@ -352,11 +371,14 @@ Cell[BoxData[
        ControlType -> Manipulator}, {{
        Hold[$CellContext`s$$], 48, "Regularity degree (s)"}, 1, 100, 1, 
       ControlType -> Manipulator}, {{
-       Hold[$CellContext`esum1$$], 48, "Total deficiency (e_sum)"}, 
-      ControlType -> InputField}, {{
-       Hold[$CellContext`emax1$$], 48, "Maximum deficiency (e_max)"}, 
-      ControlType -> InputField}}, Typeset`size$$ = {
-    483.3750000000012, {161.60591622792214`, 166.76465658844478`}}, 
+       Hold[$CellContext`esum1$$], 48, 
+       Row[{"Total deficiency (", 
+         Subscript["e", "sum"], ")"}]}, ControlType -> InputField}, {{
+       Hold[$CellContext`emax1$$], 48, 
+       Row[{"Maximum deficiency (", 
+         Subscript["e", "max"], ")"}]}, ControlType -> InputField}}, 
+    Typeset`size$$ = {
+    479.4271555813766, {159.6922632291938, 164.85100358971644`}}, 
     Typeset`update$$ = 0, Typeset`initDone$$, Typeset`skipInitDone$$ = True, 
     Typeset`keyframeActionsQ$$ = False, Typeset`keyframeList$$ = {}}, 
     DynamicBox[Manipulate`ManipulateBoxes[
@@ -387,8 +409,12 @@ $CellContext`esum1$$,
             $CellContext`simulateConditions[$CellContext`n$$, \
 $CellContext`s$$, $CellContext`esum1$$, $CellContext`emax1$$], 1]}; Show[
           ListPlot3D[$CellContext`data$, AxesLabel -> {
-             Style["Maximum deficiency (e_max)", 12, Black], 
-             Style["Total deficiency (e_sum)", 12, Black], 
+             Style[
+              Row[{"Maximum deficiency (", 
+                Subscript["e", "max"], ")"}], 12, Black], 
+             Style[
+              Row[{"Total deficiency (", 
+                Subscript["e", "sum"], ")"}], 12, Black], 
              Style["Number of auxiliary nodes (M)", 12, Black]}, TicksStyle -> 
            Directive[10, Black], LabelStyle -> Directive[10, Black], 
            ColorFunction -> "Rainbow", Mesh -> None, PlotRange -> All, Boxed -> 
@@ -399,13 +425,15 @@ $CellContext`s$$, $CellContext`esum1$$, $CellContext`emax1$$], 1]}; Show[
       "Specifications" :> {{{$CellContext`n$$, 50, 
           "Number of original nodes (N)"}, 5, 100, 
          1}, {{$CellContext`s$$, 48, "Regularity degree (s)"}, 1, 100, 
-         1}, {{$CellContext`esum1$$, 48, "Total deficiency (e_sum)"}, 
-         ControlType -> 
+         1}, {{$CellContext`esum1$$, 48, 
+          Row[{"Total deficiency (", 
+            Subscript["e", "sum"], ")"}]}, ControlType -> 
          InputField}, {{$CellContext`emax1$$, 48, 
-          "Maximum deficiency (e_max)"}, ControlType -> InputField}}, 
+          Row[{"Maximum deficiency (", 
+            Subscript["e", "max"], ")"}]}, ControlType -> InputField}}, 
       "Options" :> {}, "DefaultOptions" :> {}],
      ImageSizeCache->{
-      811.5258069629085, {186.69567208729714`, 191.85441244781978`}},
+      807.577962544284, {184.7820190885688, 189.94075944909144`}},
      SingleEvaluation->True],
     Deinitialization:>None,
     DynamicModuleValues:>{},
@@ -416,18 +444,10 @@ $CellContext`s$$, $CellContext`esum1$$, $CellContext`emax1$$], 1]}; Show[
    Deployed->True,
    StripOnInput->False],
   Manipulate`InterpretManipulate[1]]], "Output",
- CellChangeTimes->{
-  3.969881182442892*^9, {3.969881231858856*^9, 3.9698812513350906`*^9}, {
-   3.969881659575844*^9, 3.9698816716113186`*^9}, 3.9698817366042557`*^9, 
-   3.969881850282469*^9, {3.969882064895855*^9, 3.9698820676931725`*^9}, 
-   3.9698821335710926`*^9, 3.9698821636967545`*^9, {3.969882202139103*^9, 
-   3.969882206278843*^9}, {3.9698822494228745`*^9, 3.9698822519367695`*^9}, {
-   3.9698823153390045`*^9, 3.969882333221325*^9}, 3.969882655664894*^9, {
-   3.9698826895040092`*^9, 3.969882695853359*^9}, 3.969883012752123*^9, {
-   3.969883194733135*^9, 3.9698832379813423`*^9}, {3.9698834154344025`*^9, 
-   3.969883442694479*^9}, {3.969883523550596*^9, 3.969883619799225*^9}, {
-   3.9698846086491737`*^9, 3.9698846287513504`*^9}},
- CellLabel->"Out[13]=",ExpressionUUID->"4b757b77-8c74-cd4a-b5c4-c1e27f1f6fc0"]
+ CellChangeTimes->{{3.970842992803007*^9, 3.970843013984886*^9}, {
+   3.9708430999350185`*^9, 3.970843203233347*^9}, 3.97084324621039*^9, 
+   3.970843319040451*^9},
+ CellLabel->"Out[51]=",ExpressionUUID->"079c8596-9e5d-7a4c-a95f-2a5a463c9f71"]
 }, Open  ]]
 }, Open  ]]
 }, Open  ]]
@@ -455,16 +475,16 @@ Cell[576, 22, 218, 3, 86, "Title",ExpressionUUID->"e7f5290d-210a-664d-a015-de7ee
 Cell[CellGroupData[{
 Cell[819, 29, 363, 10, 59, "Section",ExpressionUUID->"3ec6e693-ea45-584f-8509-38365f24f368"],
 Cell[CellGroupData[{
-Cell[1207, 43, 4996, 117, 582, "Code",ExpressionUUID->"26d4e0b3-c026-0049-9627-09ba95adce62"],
-Cell[6206, 162, 416, 6, 28, "Output",ExpressionUUID->"c1d00eb8-7a26-ca46-bc20-7169fbab39ac"],
-Cell[6625, 170, 415, 6, 28, "Output",ExpressionUUID->"9c9eb423-b95e-4a40-813d-00be90d85e08"]
+Cell[1207, 43, 4997, 117, 582, "Code",ExpressionUUID->"26d4e0b3-c026-0049-9627-09ba95adce62"],
+Cell[6207, 162, 491, 7, 28, "Output",ExpressionUUID->"345c6fe9-c0be-5440-aefa-072a8bfc5dbb"],
+Cell[6701, 171, 490, 7, 28, "Output",ExpressionUUID->"7538bc9c-a12e-5646-8f82-c4c201861a3c"]
 }, Open  ]]
 }, Open  ]],
 Cell[CellGroupData[{
-Cell[7089, 182, 183, 3, 59, "Section",ExpressionUUID->"02b02b72-0bf7-874b-93e6-aa7c167bb8dd"],
+Cell[7240, 184, 183, 3, 59, "Section",ExpressionUUID->"02b02b72-0bf7-874b-93e6-aa7c167bb8dd"],
 Cell[CellGroupData[{
-Cell[7297, 189, 6785, 151, 756, "Code",ExpressionUUID->"1a55244e-f948-2b4a-8030-627efafef1af"],
-Cell[14085, 342, 4730, 87, 393, "Output",ExpressionUUID->"4b757b77-8c74-cd4a-b5c4-c1e27f1f6fc0"]
+Cell[7448, 191, 7782, 168, 740, "Code",ExpressionUUID->"1a55244e-f948-2b4a-8030-627efafef1af"],
+Cell[15233, 361, 4435, 88, 390, "Output",ExpressionUUID->"079c8596-9e5d-7a4c-a95f-2a5a463c9f71"]
 }, Open  ]]
 }, Open  ]]
 }, Open  ]]
