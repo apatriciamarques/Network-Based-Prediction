@@ -4,8 +4,8 @@
 
 The QMME protocol encodes higher-order neighborhood statistics into amplitude-encoded quantum states. These states are then classified using a fully quantum, kernel-based binary classification circuit.
 
-> Paper: _Quantum Multi-Order Moment Embedding for Graph-Based Node Classification_  
-> Patrícia Marques, Andreas Wichert, Bruno Coutinho (2025)
+> Paper: _Quantum Network-Based Prediction of Cancer Driver Genes_  
+> Patrícia Marques, Andreas Wichert, Duarte Magano, Bruno Coutinho (2025)
 
 ## Key Features
 
